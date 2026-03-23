@@ -32,7 +32,7 @@ Discover, install, and publish skills for Claude Code, Cursor, Windsurf, GitHub 
 
 ### Desktop App (macOS, Windows, Linux)
 
-[Download for macOS](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.0/SkillsGate-0.1.0-arm64.dmg) &middot; [Windows](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.0/SkillsGate.Setup.0.1.0.exe) &middot; [Linux AppImage](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.0/SkillsGate-0.1.0-x86_64.AppImage) &middot; [Debian/Ubuntu .deb](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.0/SkillsGate-0.1.0-amd64.deb)
+[Download for macOS](https://github.com/skillsgate/skillsgate/releases/download/untagged-4b673261ff00315f2834/SkillsGate-0.1.0-arm64.dmg) &middot; [Windows](https://github.com/skillsgate/skillsgate/releases/download/untagged-4b673261ff00315f2834/SkillsGate.Setup.0.1.0.exe) &middot; [Linux AppImage](https://github.com/skillsgate/skillsgate/releases/download/untagged-4b673261ff00315f2834/SkillsGate-0.1.0-x86_64.AppImage) &middot; [Debian/Ubuntu .deb](https://github.com/skillsgate/skillsgate/releases/download/untagged-4b673261ff00315f2834/SkillsGate-0.1.0-amd64.deb)
 
 Three-column skill browser with search, favorites, remote servers, and a built-in editor. Auto-updates via GitHub Releases.
 
