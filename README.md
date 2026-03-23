@@ -4,18 +4,23 @@
 
 <h1 align="center">SkillsGate</h1>
 
-<p align="center">The open marketplace for AI agent skills.</p>
+<p align="center">Desktop app and TUI to organize AI agent skills across 18 tools.</p>
 
 <p align="center">
   <a href="https://skillsgate.ai">Website</a> &middot;
-  <a href="https://github.com/skillsgate/skillsgate/releases/tag/desktop-v0.1.0">Download Desktop App</a> &middot;
-  <a href="https://www.npmjs.com/package/skillsgate">CLI on npm</a> &middot;
   <a href="https://x.com/sultanvaliyev">@sultanvaliyev</a>
 </p>
 
 <p align="center">
+  <a href="https://github.com/skillsgate/skillsgate/releases/download/untagged-4b673261ff00315f2834/SkillsGate-0.1.0-arm64.dmg">macOS</a> &middot;
+  <a href="https://github.com/skillsgate/skillsgate/releases/download/untagged-4b673261ff00315f2834/SkillsGate.Setup.0.1.0.exe">Windows</a> &middot;
+  <a href="https://github.com/skillsgate/skillsgate/releases/download/untagged-4b673261ff00315f2834/SkillsGate-0.1.0-x86_64.AppImage">Linux</a> &middot;
+  <a href="https://github.com/skillsgate/skillsgate/releases/download/untagged-4b673261ff00315f2834/SkillsGate-0.1.0-amd64.deb">Ubuntu .deb</a> &middot;
+  <code>npm i -g @skillsgate/tui</code>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/npm/v/skillsgate?color=a8a29e&label=CLI" alt="CLI version" />
-  <img src="https://img.shields.io/github/v/release/skillsgate/skillsgate?color=a8a29e&label=Desktop" alt="Desktop version" />
   <img src="https://img.shields.io/badge/agents-18-a8a29e" alt="18 agents" />
   <img src="https://img.shields.io/badge/license-MIT-a8a29e" alt="MIT license" />
 </p>
