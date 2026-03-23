@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://skillsgate.ai">Website</a> &middot;
-  <a href="https://github.com/skillsgate/skillsgate/releases/latest">Download Desktop App</a> &middot;
+  <a href="https://github.com/skillsgate/skillsgate/releases/tag/desktop-v0.1.0">Download Desktop App</a> &middot;
   <a href="https://www.npmjs.com/package/skillsgate">CLI on npm</a> &middot;
   <a href="https://x.com/sultanvaliyev">@sultanvaliyev</a>
 </p>
