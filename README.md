@@ -32,23 +32,7 @@ Discover, install, and publish skills for Claude Code, Cursor, Windsurf, GitHub 
 
 ### Desktop App (macOS, Windows, Linux)
 
-<p>
-  <a href="https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.0/SkillsGate-0.1.0-arm64.dmg">
-    <img src="https://img.shields.io/badge/macOS-Download%20.dmg-1c1917?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS" />
-  </a>
-  &nbsp;
-  <a href="https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.0/SkillsGate.Setup.0.1.0.exe">
-    <img src="https://img.shields.io/badge/Windows-Download%20.exe-1c1917?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" />
-  </a>
-  &nbsp;
-  <a href="https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.0/SkillsGate-0.1.0-x86_64.AppImage">
-    <img src="https://img.shields.io/badge/Linux-Download%20.AppImage-1c1917?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux" />
-  </a>
-  &nbsp;
-  <a href="https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.0/SkillsGate-0.1.0-amd64.deb">
-    <img src="https://img.shields.io/badge/Debian%2FUbuntu-Download%20.deb-1c1917?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Download .deb for Ubuntu" />
-  </a>
-</p>
+[Download for macOS](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.0/SkillsGate-0.1.0-arm64.dmg) &middot; [Windows](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.0/SkillsGate.Setup.0.1.0.exe) &middot; [Linux AppImage](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.0/SkillsGate-0.1.0-x86_64.AppImage) &middot; [Debian/Ubuntu .deb](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.0/SkillsGate-0.1.0-amd64.deb)
 
 Three-column skill browser with search, favorites, remote servers, and a built-in editor. Auto-updates via GitHub Releases.
 
