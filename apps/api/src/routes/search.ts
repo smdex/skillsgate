@@ -1,8 +1,14 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import type { Bindings, Variables } from "../types";
 import { authMiddleware } from "../middleware/auth";
 import { rateLimitMiddleware } from "../middleware/rate-limit";
 import { searchSkills } from "../lib/search";
+
+const searchBodySchema = z.object({
+  query: z.string().min(1, "query is required").max(500, "query must be 500 characters or less"),
+  limit: z.number().int().min(1).max(5).optional().default(5),
+});
 
 export const searchRoute = new Hono<{
   Bindings: Bindings;
@@ -12,22 +18,24 @@ export const searchRoute = new Hono<{
 searchRoute.use("/search", authMiddleware, rateLimitMiddleware);
 
 searchRoute.post("/search", async (c) => {
-  const body = await c.req.json<{ query?: string; limit?: number }>();
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON in request body" }, 400);
+  }
 
-  // Validate query
-  const query = body.query?.trim();
-  if (!query || query.length === 0) {
+  const parseResult = searchBodySchema.safeParse(body);
+  if (!parseResult.success) {
+    return c.json({ error: parseResult.error.issues[0]?.message ?? "Invalid request" }, 400);
+  }
+
+  const query = parseResult.data.query.trim();
+  if (!query) {
     return c.json({ error: "query is required" }, 400);
   }
-  if (query.length > 500) {
-    return c.json({ error: "query must be 500 characters or less" }, 400);
-  }
 
-  // Validate limit (max 5 results per search)
-  let limit = body.limit ?? 5;
-  if (typeof limit !== "number" || limit < 1 || limit > 5) {
-    limit = 5;
-  }
+  const limit = parseResult.data.limit;
 
   const db = c.var.db;
   const userId = c.var.userId;

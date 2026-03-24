@@ -176,7 +176,12 @@ skillsRoute.post("/skills/:id/files", async (c) => {
   const files: { name: string; size: number; key: string }[] = [];
   let skillMdContent: string | null = null;
 
-  for (const { filename, file, arrayBuffer } of incoming) {
+  for (const { filename: rawFilename, file, arrayBuffer } of incoming) {
+    // Sanitize filename: prevent path traversal and restrict to safe characters
+    const filename = rawFilename.replace(/\.\./g, "").replace(/[^a-zA-Z0-9._\-\/]/g, "_");
+    if (!filename || filename.startsWith("/") || filename.startsWith("\\")) {
+      return c.json({ error: `Invalid filename: "${rawFilename}"` }, 400);
+    }
     const key = `skills/${skillId}/${filename}`;
 
     await c.env.R2_SKILLS.put(key, arrayBuffer, {

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { createDatabaseClient } from "@skillsgate/database";
+import { timingSafeEqual } from "../lib/timing-safe";
 import type { Bindings, Variables, VectorizeSkillWorkflowInput, DiscoverRepoQueueMessage } from "../types";
 
 /**
@@ -69,7 +70,7 @@ export const adminRoute = new Hono<{
 adminRoute.post("/admin/vectorize-skill", async (c) => {
   // Verify internal API key
   const apiKey = c.req.header('X-Internal-Api-Key');
-  if (!apiKey || apiKey !== c.env.INTERNAL_API_KEY) {
+  if (!apiKey || !timingSafeEqual(apiKey, c.env.INTERNAL_API_KEY)) {
     return c.json({
       error: 'Unauthorized',
       message: 'Invalid or missing X-Internal-Api-Key header'
@@ -142,7 +143,7 @@ adminRoute.post("/admin/vectorize-skill", async (c) => {
 adminRoute.post("/admin/discover-repo", async (c) => {
   // Verify internal API key
   const apiKey = c.req.header('X-Internal-Api-Key');
-  if (!apiKey || apiKey !== c.env.INTERNAL_API_KEY) {
+  if (!apiKey || !timingSafeEqual(apiKey, c.env.INTERNAL_API_KEY)) {
     return c.json({
       error: 'Unauthorized',
       message: 'Invalid or missing X-Internal-Api-Key header'
@@ -230,7 +231,7 @@ adminRoute.post("/admin/discover-repo", async (c) => {
 adminRoute.get("/admin/health", async (c) => {
   // Verify internal API key
   const apiKey = c.req.header('X-Internal-Api-Key');
-  if (!apiKey || apiKey !== c.env.INTERNAL_API_KEY) {
+  if (!apiKey || !timingSafeEqual(apiKey, c.env.INTERNAL_API_KEY)) {
     return c.json({
       error: 'Unauthorized',
       message: 'Invalid or missing X-Internal-Api-Key header'

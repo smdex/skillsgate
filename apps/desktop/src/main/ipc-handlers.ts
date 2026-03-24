@@ -680,16 +680,28 @@ export function registerIpcHandlers(): void {
 
   // Read the content of a skill's SKILL.md file
   ipcMain.handle("skill:read-content", async (_event, skillPath: string) => {
-    const skillMdPath = path.join(skillPath, "SKILL.md")
+    // Validate the path is within allowed skill directories
+    const resolved = path.resolve(skillPath)
+    const isAllowed = Object.values(agentRegistry).some(
+      (agent) => resolved.startsWith(path.resolve(agent.globalSkillsDir))
+    ) || resolved.startsWith(path.resolve(CANONICAL_SKILLS_DIR))
+    if (!isAllowed) {
+      throw new Error("Access denied: path is outside skill directories")
+    }
+
+    const skillMdPath = path.join(resolved, "SKILL.md")
     try {
       return await fs.readFile(skillMdPath, "utf-8")
     } catch {
-      // If skillPath itself is a file, try reading it directly
-      try {
-        return await fs.readFile(skillPath, "utf-8")
-      } catch {
-        return ""
+      // If skillPath itself is a SKILL.md file, try reading it directly
+      if (resolved.endsWith("SKILL.md")) {
+        try {
+          return await fs.readFile(resolved, "utf-8")
+        } catch {
+          return ""
+        }
       }
+      return ""
     }
   })
 
@@ -966,9 +978,17 @@ export function registerIpcHandlers(): void {
     clearAuthFromDb()
   })
 
-  // Open a URL in the default browser
+  // Open a URL in the default browser (only https)
   ipcMain.handle("auth:open-browser", async (_event, url: string) => {
-    await shell.openExternal(url)
+    try {
+      const parsed = new URL(url)
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+        throw new Error("Only http/https URLs are allowed")
+      }
+      await shell.openExternal(url)
+    } catch (err) {
+      throw new Error(`Invalid URL: ${err instanceof Error ? err.message : String(err)}`)
+    }
   })
 
   // -------------------------------------------------------------------------
@@ -1038,8 +1058,17 @@ export function registerIpcHandlers(): void {
 
   // Write skill content back to disk
   ipcMain.handle("skill:write-content", async (_, filePath: string, content: string) => {
+    // Validate the path is within allowed skill directories
+    const resolved = path.resolve(filePath)
+    const isAllowed = Object.values(agentRegistry).some(
+      (agent) => resolved.startsWith(path.resolve(agent.globalSkillsDir))
+    ) || resolved.startsWith(path.resolve(CANONICAL_SKILLS_DIR))
+    if (!isAllowed) {
+      throw new Error("Access denied: path is outside skill directories")
+    }
+
     try {
-      await fs.writeFile(filePath, content, "utf-8")
+      await fs.writeFile(resolved, content, "utf-8")
     } catch (err) {
       throw new Error(`Failed to save: ${err instanceof Error ? err.message : String(err)}`)
     }
@@ -1047,7 +1076,15 @@ export function registerIpcHandlers(): void {
 
   // Open skill folder in Finder/Explorer
   ipcMain.handle("skill:open-in-finder", (_, filePath: string) => {
-    shell.showItemInFolder(filePath)
+    // Validate the path is within allowed skill directories
+    const resolved = path.resolve(filePath)
+    const isAllowed = Object.values(agentRegistry).some(
+      (agent) => resolved.startsWith(path.resolve(agent.globalSkillsDir))
+    ) || resolved.startsWith(path.resolve(CANONICAL_SKILLS_DIR))
+    if (!isAllowed) {
+      throw new Error("Access denied: path is outside skill directories")
+    }
+    shell.showItemInFolder(resolved)
   })
 
   // Remove skill from a specific agent only (delete symlink, keep canonical)

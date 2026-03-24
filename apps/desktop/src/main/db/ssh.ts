@@ -121,11 +121,14 @@ export async function testConnection(
 function shellQuotePath(remotePath: string): string {
   let expanded = remotePath
   if (expanded.startsWith("~/")) {
-    expanded = "$HOME/" + expanded.slice(2)
+    // Use single quotes for the rest after $HOME to prevent injection
+    const rest = expanded.slice(2).replace(/'/g, "'\\''")
+    return `"$HOME"/'${rest}'`
   } else if (expanded === "~") {
-    expanded = "$HOME"
+    return `"$HOME"`
   }
-  return `"${expanded.replace(/"/g, '\\"')}"`
+  // Use single quotes to prevent all shell expansion/injection
+  return `'${expanded.replace(/'/g, "'\\''")}'`
 }
 
 const DELIMITER_PREFIX = "---SKILLSGATE_DELIM:"
@@ -237,10 +240,14 @@ export async function scanRemoteSkills(
   if (paths.length === 0) return []
 
   // Round trip 2: Batch read all files in a single SSH call
-  const catCommands = paths
+  // Validate paths: only allow typical file paths (no shell metacharacters)
+  const safePaths = paths.filter((p) => /^[a-zA-Z0-9_.\/\-~]+$/.test(p))
+  if (safePaths.length === 0) return []
+
+  const catCommands = safePaths
     .map((p) => {
       const escaped = `'${p.replace(/'/g, "'\\''")}'`
-      return `echo '${DELIMITER_PREFIX}${p}${DELIMITER_SUFFIX}' && cat ${escaped}`
+      return `printf '%s\\n' '${DELIMITER_PREFIX}${p.replace(/'/g, "'\\''") }${DELIMITER_SUFFIX}' && cat ${escaped}`
     })
     .join(" && ")
 

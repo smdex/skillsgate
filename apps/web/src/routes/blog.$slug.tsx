@@ -113,7 +113,9 @@ function sanitizeHtml(html: string): string {
 		/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi,
 		""
 	);
-	clean = clean.replace(/href\s*=\s*["']?\s*javascript:/gi, 'href="');
+	clean = clean.replace(/(href|src|data|action|formaction)\s*=\s*["']?\s*javascript:/gi, '$1="');
+	clean = clean.replace(/(href|src)\s*=\s*["']?\s*data:\s*text\/html/gi, '$1="');
+	clean = clean.replace(/<base\b[^>]*\/?>/gi, "");
 	return clean;
 }
 

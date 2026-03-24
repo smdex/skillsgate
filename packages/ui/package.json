@@ -10,10 +10,10 @@
 		}
 	},
 	"peerDependencies": {
-		"react": "^19"
+		"react": "19.1.5"
 	},
 	"devDependencies": {
-		"@types/react": "^19.1.5",
-		"typescript": "^5.7.4"
+		"@types/react": "19.2.13",
+		"typescript": "5.9.3"
 	}
 }

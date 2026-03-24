@@ -121,6 +121,22 @@ marked.setOptions({
   gfm: true,
 })
 
+function sanitizeHtml(html: string): string {
+  let clean = html.replace(
+    /<(script|iframe|object|embed|form|style)\b[^<]*(?:(?!<\/\1>)<[^<]*)*<\/\1>/gi,
+    ""
+  )
+  clean = clean.replace(/<(script|iframe|object|embed|link)\b[^>]*\/?>/gi, "")
+  clean = clean.replace(
+    /\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi,
+    ""
+  )
+  clean = clean.replace(/href\s*=\s*["']?\s*javascript:/gi, 'href="')
+  clean = clean.replace(/src\s*=\s*["']?\s*javascript:/gi, 'src="')
+  clean = clean.replace(/data\s*=\s*["']?\s*javascript:/gi, 'data="')
+  return clean
+}
+
 function renderMarkdown(raw: string): string {
   // Strip frontmatter before rendering
   let content = raw
@@ -130,7 +146,7 @@ function renderMarkdown(raw: string): string {
       content = content.slice(endIdx + 3).trim()
     }
   }
-  return marked.parse(content) as string
+  return sanitizeHtml(marked.parse(content) as string)
 }
 
 // --------------------------------------------------------------------------

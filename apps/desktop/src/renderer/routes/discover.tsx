@@ -82,6 +82,21 @@ function formatStars(stars: number): string {
 // Configure marked for synchronous rendering
 marked.setOptions({ async: false, breaks: true, gfm: true })
 
+function sanitizeHtml(html: string): string {
+  let clean = html.replace(
+    /<(script|iframe|object|embed|form|style)\b[^<]*(?:(?!<\/\1>)<[^<]*)*<\/\1>/gi,
+    ""
+  )
+  clean = clean.replace(/<(script|iframe|object|embed|link)\b[^>]*\/?>/gi, "")
+  clean = clean.replace(
+    /\s+on\w+\s*=\s*["']?[^"'>\s]*["']?/gi,
+    ""
+  )
+  clean = clean.replace(/href\s*=\s*["']?\s*javascript:/gi, 'href="')
+  clean = clean.replace(/src\s*=\s*["']?\s*javascript:/gi, 'src="')
+  return clean
+}
+
 function renderMarkdown(raw: string): string {
   let content = raw
   if (content.startsWith("---")) {
@@ -90,7 +105,7 @@ function renderMarkdown(raw: string): string {
       content = content.slice(endIdx + 3).trim()
     }
   }
-  return marked.parse(content) as string
+  return sanitizeHtml(marked.parse(content) as string)
 }
 
 // ---------------------------------------------------------------------------

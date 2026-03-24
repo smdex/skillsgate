@@ -12,10 +12,10 @@
   "dependencies": {
     "@opentui/core": "0.1.90",
     "@opentui/react": "0.1.90",
-    "gray-matter": "^4.0.3"
+    "gray-matter": "4.0.3"
   },
   "peerDependencies": {
-    "react": ">=19.0.0"
+    "react": "19.1.5"
   },
   "repository": {
     "type": "git",

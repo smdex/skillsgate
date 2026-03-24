@@ -23,7 +23,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 		return redirect("/dashboard/publisher/repos/connect?error=denied");
 	}
 
-	if (!installationId) {
+	if (!installationId || !/^\d+$/.test(installationId)) {
 		return redirect("/dashboard/publisher/repos/connect?error=invalid");
 	}
 

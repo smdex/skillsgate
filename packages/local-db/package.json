@@ -19,6 +19,6 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^22.7.4"
+    "@types/node": "22.19.11"
   }
 }

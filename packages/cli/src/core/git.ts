@@ -27,6 +27,10 @@ export async function cloneRepo(source: ParsedSource): Promise<string> {
   try {
     const cloneOptions = ["--depth", "1"];
     if (source.ref) {
+      // Validate ref to prevent command injection via malicious ref names
+      if (!/^[a-zA-Z0-9._\/-]+$/.test(source.ref)) {
+        throw new GitCloneError(`Invalid ref format: "${source.ref}"`);
+      }
       cloneOptions.push("--branch", source.ref);
     }
 

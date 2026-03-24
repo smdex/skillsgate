@@ -29,7 +29,7 @@ function createWindow(): void {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   })
 
@@ -37,10 +37,36 @@ function createWindow(): void {
     mainWindow?.show()
   })
 
-  // Open external links in the default browser
+  // Open external links in the default browser (only http/https)
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    try {
+      const parsed = new URL(url)
+      if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+        shell.openExternal(url)
+      }
+    } catch {
+      // Invalid URL — ignore
+    }
     return { action: "deny" }
+  })
+
+  // Prevent navigating the main window to external URLs
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    const allowedOrigins = [
+      "file://",
+      ...(process.env.ELECTRON_RENDERER_URL ? [process.env.ELECTRON_RENDERER_URL] : []),
+    ]
+    if (!allowedOrigins.some((origin) => url.startsWith(origin))) {
+      event.preventDefault()
+      try {
+        const parsed = new URL(url)
+        if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+          shell.openExternal(url)
+        }
+      } catch {
+        // Invalid URL — ignore
+      }
+    }
   })
 
   // Start the file watcher once the window is created

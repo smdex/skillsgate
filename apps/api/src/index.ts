@@ -24,7 +24,19 @@ import type { VectorizeSkillWorkflowInput, DiscoverRepoQueueMessage } from "./ty
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-app.use("*", cors());
+app.use("*", cors({
+  origin: [
+    "https://skillsgate.ai",
+    "https://www.skillsgate.ai",
+    "https://openskills.sh",
+    "https://www.openskills.sh",
+    ...(process.env.NODE_ENV === "development" ? ["http://localhost:5173", "http://localhost:8787"] : []),
+  ],
+  allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowHeaders: ["Content-Type", "Authorization", "X-Internal-Api-Key"],
+  credentials: true,
+  maxAge: 86400,
+}));
 
 app.route("/", healthRoute);
 app.route("/", telemetryRoute);

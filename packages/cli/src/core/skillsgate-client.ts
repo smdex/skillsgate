@@ -87,12 +87,20 @@ export async function downloadSkill(
 
   for (const file of data.files) {
     const filePath = path.join(skillDir, file.path);
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    // Prevent path traversal: ensure resolved path stays within skillDir
+    const resolved = path.resolve(filePath);
+    if (!resolved.startsWith(path.resolve(skillDir) + path.sep) && resolved !== path.resolve(skillDir)) {
+      throw new SkillsGateDownloadError(
+        `Malicious file path detected: "${file.path}". Aborting download.`
+      );
+    }
+
+    await fs.mkdir(path.dirname(resolved), { recursive: true });
 
     if (file.encoding === "base64") {
-      await fs.writeFile(filePath, Buffer.from(file.content, "base64"));
+      await fs.writeFile(resolved, Buffer.from(file.content, "base64"));
     } else {
-      await fs.writeFile(filePath, file.content, "utf-8");
+      await fs.writeFile(resolved, file.content, "utf-8");
     }
   }
 

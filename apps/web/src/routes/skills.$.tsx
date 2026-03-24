@@ -56,8 +56,12 @@ function sanitizeHtml(html: string): string {
 		/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi,
 		""
 	);
-	// Remove javascript: URLs
-	clean = clean.replace(/href\s*=\s*["']?\s*javascript:/gi, 'href="');
+	// Remove javascript: URLs in href, src, data, action, formaction attributes
+	clean = clean.replace(/(href|src|data|action|formaction)\s*=\s*["']?\s*javascript:/gi, '$1="');
+	// Remove data: URLs that could execute scripts (data:text/html, etc.)
+	clean = clean.replace(/(href|src)\s*=\s*["']?\s*data:\s*text\/html/gi, '$1="');
+	// Remove base tags (can redirect all relative URLs)
+	clean = clean.replace(/<base\b[^>]*\/?>/gi, "");
 	return clean;
 }
 
