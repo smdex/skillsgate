@@ -12,10 +12,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/skillsgate/skillsgate/releases/download/untagged-4b673261ff00315f2834/SkillsGate-0.1.0-arm64.dmg">macOS</a> &middot;
-  <a href="https://github.com/skillsgate/skillsgate/releases/download/untagged-4b673261ff00315f2834/SkillsGate.Setup.0.1.0.exe">Windows</a> &middot;
-  <a href="https://github.com/skillsgate/skillsgate/releases/download/untagged-4b673261ff00315f2834/SkillsGate-0.1.0-x86_64.AppImage">Linux</a> &middot;
-  <a href="https://github.com/skillsgate/skillsgate/releases/download/untagged-4b673261ff00315f2834/SkillsGate-0.1.0-amd64.deb">Ubuntu .deb</a> &middot;
+  <a href="https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.3/SkillsGate-0.1.3-arm64.dmg">macOS</a> &middot;
+  <a href="https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.3/SkillsGate.Setup.0.1.3.exe">Windows</a> &middot;
+  <a href="https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.3/SkillsGate-0.1.3-x86_64.AppImage">Linux</a> &middot;
+  <a href="https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.3/SkillsGate-0.1.3-amd64.deb">Ubuntu .deb</a> &middot;
   <code>npm i -g @skillsgate/tui</code>
 </p>
 
@@ -37,17 +37,9 @@ Discover, install, and publish skills for Claude Code, Cursor, Windsurf, GitHub 
 
 ### Desktop App (macOS, Windows, Linux)
 
-[Download for macOS](https://github.com/skillsgate/skillsgate/releases/download/untagged-4b673261ff00315f2834/SkillsGate-0.1.0-arm64.dmg) &middot; [Windows](https://github.com/skillsgate/skillsgate/releases/download/untagged-4b673261ff00315f2834/SkillsGate.Setup.0.1.0.exe) &middot; [Linux AppImage](https://github.com/skillsgate/skillsgate/releases/download/untagged-4b673261ff00315f2834/SkillsGate-0.1.0-x86_64.AppImage) &middot; [Debian/Ubuntu .deb](https://github.com/skillsgate/skillsgate/releases/download/untagged-4b673261ff00315f2834/SkillsGate-0.1.0-amd64.deb)
+[Download for macOS](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.3/SkillsGate-0.1.3-arm64.dmg) &middot; [Windows](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.3/SkillsGate.Setup.0.1.3.exe) &middot; [Linux AppImage](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.3/SkillsGate-0.1.3-x86_64.AppImage) &middot; [Debian/Ubuntu .deb](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.3/SkillsGate-0.1.3-amd64.deb)
 
-Three-column skill browser with search, favorites, remote servers, and a built-in editor. Auto-updates via GitHub Releases.
-
-> **macOS users:** The app is not yet notarized with Apple. After installing, if macOS shows "cannot be opened because of a problem", run this once in Terminal:
->
-> ```bash
-> xattr -d com.apple.quarantine /Applications/SkillsGate.app
-> ```
->
-> Then open the app normally. This removes the quarantine flag that macOS applies to downloaded apps. We're working on getting proper code signing and notarization set up.
+Three-column skill browser with search, favorites, remote servers, and a built-in editor. Auto-updates via GitHub Releases. The macOS build is signed and notarized with Apple.
 
 ### CLI
 
