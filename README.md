@@ -41,13 +41,13 @@ Discover, install, and publish skills for Claude Code, Cursor, Windsurf, GitHub 
 
 Three-column skill browser with search, favorites, remote servers, and a built-in editor. Auto-updates via GitHub Releases.
 
-> **macOS users:** The app is not yet code-signed with an Apple Developer certificate. After installing, run the following command once to allow it to open:
+> **macOS users:** The app is not yet notarized with Apple. After installing, if macOS shows "cannot be opened because of a problem", run this once in Terminal:
 >
 > ```bash
-> sudo codesign --force --deep --sign - /Applications/SkillsGate.app
+> xattr -d com.apple.quarantine /Applications/SkillsGate.app
 > ```
 >
-> Then open the app normally. This is a one-time step -- future auto-updates will work without it. We're working on getting proper code signing set up.
+> Then open the app normally. This removes the quarantine flag that macOS applies to downloaded apps. We're working on getting proper code signing and notarization set up.
 
 ### CLI
 
