@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Outlet, useLocation, useNavigate, Link } from "react-router";
 import { ThemeToggle, AuthButton, useAuth } from "@skillsgate/ui";
+import { DashboardStarBanner, StarPromptModal } from "~/components/github-star-prompt";
 
 export default function DashboardLayout() {
 	const location = useLocation();
@@ -94,8 +95,11 @@ export default function DashboardLayout() {
 
 			{/* Page content */}
 			<main className="max-w-6xl mx-auto px-6 py-8">
+				<DashboardStarBanner />
 				<Outlet />
 			</main>
+
+			<StarPromptModal />
 		</div>
 	);
 }
