@@ -17,7 +17,7 @@ jobs:
           - os: macos-14
             platform: mac
             arch: arm64
-          - os: macos-15-large
+          - os: macos-14
             platform: mac
             arch: x64
           - os: ubuntu-latest
@@ -44,7 +44,7 @@ jobs:
         shell: bash
 
       - name: Rebuild native modules for Electron
-        run: npx electron-rebuild -v 35.7.5 -m node_modules/better-sqlite3
+        run: npx electron-rebuild -v 35.7.5 -m node_modules/better-sqlite3 ${{ matrix.arch && format('-a {0}', matrix.arch) || '' }}
 
       - name: Remove bun.lock to prevent electron-builder from using bun
         run: rm -f bun.lock
