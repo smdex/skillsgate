@@ -11,6 +11,8 @@ files:
   - node_modules/file-uri-to-path/**/*
   - node_modules/prebuild-install/**/*
 npmRebuild: true
+asarUnpack:
+  - "**/*.node"
 extraMetadata:
   main: out/main/index.js
 

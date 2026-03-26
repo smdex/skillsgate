@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, nativeImage } from "electron"
+import { app, BrowserWindow, dialog, shell, nativeImage } from "electron"
 import path from "node:path"
 import { registerIpcHandlers } from "./ipc-handlers"
 import { SkillsFileWatcher } from "./file-watcher"
@@ -33,7 +33,16 @@ function createWindow(): void {
     },
   })
 
+  // ready-to-show can silently never fire if the renderer fails to load.
+  const showTimeout = setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      console.warn("ready-to-show did not fire within 5s — forcing window visible")
+      mainWindow.show()
+    }
+  }, 5000)
+
   mainWindow.on("ready-to-show", () => {
+    clearTimeout(showTimeout)
     mainWindow?.show()
   })
 
@@ -76,6 +85,7 @@ function createWindow(): void {
   })
 
   mainWindow.on("closed", () => {
+    clearTimeout(showTimeout)
     fileWatcher?.stop()
     fileWatcher = null
     mainWindow = null
@@ -90,7 +100,19 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  registerIpcHandlers()
+  try {
+    registerIpcHandlers()
+  } catch (err) {
+    // better-sqlite3 can fail to load (arch mismatch, missing prebuild,
+    // sandbox restrictions). Show a dialog so the user knows why the app is broken.
+    console.error("Failed to register IPC handlers:", err)
+    dialog.showErrorBox(
+      "SkillsGate failed to start",
+      "A required native module could not be loaded. Try reinstalling the app.\n\n" +
+        String(err),
+    )
+  }
+
   createWindow()
 
   app.on("activate", () => {
