@@ -16,10 +16,16 @@ jobs:
         include:
           - os: macos-14
             platform: mac
+            arch: arm64
+          - os: macos-13
+            platform: mac
+            arch: x64
           - os: ubuntu-latest
             platform: linux
+            arch: ""
           - os: windows-latest
             platform: win
+            arch: ""
 
     runs-on: ${{ matrix.os }}
 
@@ -45,7 +51,7 @@ jobs:
         shell: bash
 
       - name: Build and package desktop app
-        run: npm run package:${{ matrix.platform }} -w @skillsgate/desktop
+        run: npm run package:${{ matrix.platform }} -w @skillsgate/desktop -- ${{ matrix.arch && format('--{0}', matrix.arch) || '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # macOS code signing
@@ -59,7 +65,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-${{ matrix.platform }}
+          name: desktop-${{ matrix.platform }}${{ matrix.arch && format('-{0}', matrix.arch) || '' }}
           path: |
             apps/desktop/release/*.dmg
             apps/desktop/release/*.zip
