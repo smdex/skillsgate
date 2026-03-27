@@ -93,6 +93,14 @@ jobs:
           VERSION=${GITHUB_REF_NAME#tui-v}
           cd packages/tui
           npm version $VERSION --no-git-tag-version --allow-same-version
+          # Update optionalDependencies to match the release version
+          node -e "
+            const pkg = require('./package.json');
+            for (const k of Object.keys(pkg.optionalDependencies || {})) {
+              pkg.optionalDependencies[k] = '$VERSION';
+            }
+            require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
           npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
