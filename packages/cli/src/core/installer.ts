@@ -27,7 +27,9 @@ export function isPathSafe(targetPath: string, baseDir: string): boolean {
   );
 }
 
-// ---------- Installation ----------
+// Track which canonical directories have been claimed (written to)
+// to prevent concurrent installations from deleting each other's work
+const claimedCanonicalDirs = new Set<string>();
 
 export async function installSkillForAgent(
   skill: Skill,
@@ -57,19 +59,24 @@ export async function installSkillForAgent(
 
   try {
     if (method === "copy") {
-      await writeSkillFiles(skill, agentTargetDir);
+      await writeSkillFiles(skill, agentTargetDir, false);
     } else {
-      // Symlink mode: write to canonical, symlink from agent dir
-      await writeSkillFiles(skill, canonicalDir);
-
       const resolvedCanonical = path.resolve(canonicalDir);
       const resolvedAgent = path.resolve(agentTargetDir);
+      const isCanonicalAgent = resolvedCanonical === resolvedAgent;
 
-      if (resolvedCanonical !== resolvedAgent) {
+      // Symlink mode: write to canonical, symlink from agent dir
+      // Only write to canonical if not already claimed (first agent wins)
+      if (!claimedCanonicalDirs.has(canonicalDir)) {
+        claimedCanonicalDirs.add(canonicalDir);
+        await writeSkillFiles(skill, canonicalDir, true);
+      }
+
+      if (!isCanonicalAgent) {
         const symlinkOk = await createSymlink(canonicalDir, agentTargetDir);
         if (!symlinkOk) {
           // Fallback to copy
-          await writeSkillFiles(skill, agentTargetDir);
+          await writeSkillFiles(skill, agentTargetDir, false);
           return {
             skillName: skill.name,
             agent: agent.name,
@@ -101,8 +108,14 @@ export async function installSkillForAgent(
 async function writeSkillFiles(
   skill: Skill,
   targetDir: string,
+  cleanDir: boolean,
 ): Promise<void> {
-  await cleanAndCreateDirectory(targetDir);
+  if (cleanDir) {
+    await cleanAndCreateDirectory(targetDir);
+  } else {
+    // Ensure directory exists but don't delete if already present
+    await ensureDirectory(targetDir);
+  }
   await fs.writeFile(path.join(targetDir, "SKILL.md"), skill.content, "utf-8");
 
   const sourceDir = path.dirname(skill.filePath);
@@ -126,6 +139,17 @@ async function cleanAndCreateDirectory(dir: string): Promise<void> {
     }
   }
   await fs.mkdir(dir, { recursive: true });
+}
+
+async function ensureDirectory(dir: string): Promise<void> {
+  try {
+    await fs.mkdir(dir, { recursive: true });
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== "EEXIST") {
+      throw err;
+    }
+  }
 }
 
 async function copyDirectory(src: string, dest: string): Promise<void> {
