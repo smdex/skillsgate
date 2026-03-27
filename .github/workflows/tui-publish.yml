@@ -36,9 +36,10 @@ jobs:
         run: |
           bun install --no-save --ignore-scripts 2>/dev/null || true
           bun install @opentui/core @opentui/react react gray-matter
-          # Install target platform native binary for cross-compilation (hoisted to root)
+          # Install target platform native binary for cross-compilation (hoisted to root).
+          # Use npm --force to bypass os/cpu platform checks when cross-compiling.
           cd ../..
-          bun install @opentui/core-${PKG#tui-}
+          npm install --no-save --force @opentui/core-${PKG#tui-}
         env:
           PKG: ${{ matrix.pkg }}
 
