@@ -37,6 +37,15 @@ jobs:
           bun install @opentui/core @opentui/react react gray-matter
         shell: bash
 
+      - name: Install target platform native deps for cross-compilation
+        run: |
+          cd packages/tui
+          # Map tui package name to @opentui/core platform package
+          bun install @opentui/core-${PKG#tui-} || true
+        shell: bash
+        env:
+          PKG: ${{ matrix.pkg }}
+
       - name: Compile standalone binary
         run: bun build src/index.tsx --compile --target=${{ matrix.target }} --outfile=skillsgate-tui
         working-directory: packages/tui
