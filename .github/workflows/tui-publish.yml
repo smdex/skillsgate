@@ -36,13 +36,13 @@ jobs:
         run: |
           bun install --no-save --ignore-scripts 2>/dev/null || true
           bun install @opentui/core @opentui/react react gray-matter
-          # Install target platform native binary for cross-compilation
+          # Install target platform native binary for cross-compilation (hoisted to root)
+          cd ../..
           bun install @opentui/core-${PKG#tui-}
         env:
           PKG: ${{ matrix.pkg }}
 
       - name: Verify native dep is resolvable
-        working-directory: packages/tui
         shell: bash
         run: ls node_modules/@opentui/core-${PKG#tui-}/index.ts
         env:
