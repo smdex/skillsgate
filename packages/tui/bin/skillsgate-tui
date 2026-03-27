@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import os from "node:os";
-
-const require = createRequire(import.meta.url);
 
 const platform = os.platform();
 const arch = os.arch();
@@ -20,10 +20,36 @@ if (!pkg) {
   process.exit(1);
 }
 
-try {
-  const binPath = require.resolve(`@skillsgate/${pkg}/skillsgate-tui`);
-  execFileSync(binPath, process.argv.slice(2), { stdio: "inherit" });
-} catch {
+// Try multiple resolution strategies since global installs place optional
+// deps as siblings rather than nested under this package's node_modules.
+const binName = platform === "win32" ? "skillsgate-tui.exe" : "skillsgate-tui";
+const require = createRequire(import.meta.url);
+const thisDir = path.dirname(fileURLToPath(import.meta.url));
+
+const candidates = [
+  // 1. Nested node_modules (local installs)
+  () => require.resolve(`@skillsgate/${pkg}/${binName}`),
+  // 2. Sibling in global node_modules (npm install -g)
+  //    thisDir = .../node_modules/@skillsgate/tui/bin → go up 3 to node_modules
+  () => path.join(thisDir, "..", "..", "..", `@skillsgate/${pkg}`, binName),
+];
+
+let binPath = null;
+for (const resolve of candidates) {
+  try {
+    const p = resolve();
+    // Verify it exists by importing fs synchronously
+    require("fs").accessSync(p, require("fs").constants.X_OK);
+    binPath = p;
+    break;
+  } catch {
+    continue;
+  }
+}
+
+if (!binPath) {
   console.error("Platform binary not found. Try reinstalling: npm install -g @skillsgate/tui");
   process.exit(1);
 }
+
+execFileSync(binPath, process.argv.slice(2), { stdio: "inherit" });
