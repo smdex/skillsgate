@@ -1,11 +1,12 @@
 {
   "name": "@skillsgate/tui",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "type": "module",
   "bin": {
     "skillsgate-tui": "bin/skillsgate-tui"
   },
   "scripts": {
+    "postinstall": "node bin/postinstall.cjs",
     "dev": "bun --watch run src/index.tsx",
     "start": "bun run src/index.tsx"
   },
