@@ -30,19 +30,21 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install TUI dependencies only
+      - name: Install TUI dependencies
+        working-directory: packages/tui
+        shell: bash
         run: |
-          cd packages/tui
           bun install --no-save --ignore-scripts 2>/dev/null || true
           bun install @opentui/core @opentui/react react gray-matter
-        shell: bash
+          # Install target platform native binary for cross-compilation
+          bun install @opentui/core-${PKG#tui-}
+        env:
+          PKG: ${{ matrix.pkg }}
 
-      - name: Install target platform native deps for cross-compilation
-        run: |
-          cd packages/tui
-          # Map tui package name to @opentui/core platform package
-          bun install @opentui/core-${PKG#tui-} || true
+      - name: Verify native dep is resolvable
+        working-directory: packages/tui
         shell: bash
+        run: ls node_modules/@opentui/core-${PKG#tui-}/index.ts
         env:
           PKG: ${{ matrix.pkg }}
 
