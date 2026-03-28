@@ -277,7 +277,7 @@ export default function Home() {
 							className="animate-fade-up text-[11px] md:text-[12px] font-mono tracking-[0.2em] uppercase text-muted mb-6"
 							style={{ animationDelay: "0.1s" }}
 						>
-							Your AI agent skills, finally organized
+							Discover and manage skills for every AI agent
 						</p>
 						<h1
 							className="animate-fade-up text-[clamp(2.25rem,6vw,4.5rem)] font-semibold leading-[1.08] tracking-tight text-foreground"
