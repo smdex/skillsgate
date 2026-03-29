@@ -95,9 +95,10 @@ export function Layout() {
     if (state.showHelp) return
 
     // Tab switching (only when not in detail/form views)
-    const inFormView = state.activeView === "detail" || state.activeView === "add-server"
-      || state.activeView === "edit-server" || state.activeView === "settings"
-      || state.activeView === "server-skills" || state.activeView === "login"
+    const activeView = state.activeView as string
+    const inFormView = activeView === "detail" || activeView === "add-server"
+      || activeView === "edit-server" || activeView === "settings"
+      || activeView === "server-skills" || activeView === "login"
     if (!inFormView) {
       if (key.name === "1") dispatch({ type: "NAVIGATE", view: "home" })
       if (key.name === "2") dispatch({ type: "NAVIGATE", view: "discover" })
@@ -109,7 +110,7 @@ export function Layout() {
     }
 
     // "s" to open settings (only from home/favorites views when not in search)
-    if (key.name === "s" && state.focusedPane !== "search"
+    if (key.name === "s" && (state.focusedPane as string) !== "search"
       && state.activeView !== "discover" && state.activeView !== "detail"
       && !inFormView) {
       dispatch({ type: "NAVIGATE", view: "settings" })
@@ -139,20 +140,20 @@ export function Layout() {
       if (state.installedFilter) {
         dispatch({ type: "SET_INSTALLED_FILTER", filter: "" })
       }
-      if (state.focusedPane === "search") {
+      if ((state.focusedPane as string) === "search") {
         dispatch({ type: "SET_FOCUSED_PANE", pane: "list" })
       }
       return
     }
 
     // "l" to navigate to login view (always -- allows re-login if token expired)
-    if (key.name === "l" && state.focusedPane !== "search" && state.activeView !== "detail" && state.activeView !== "login") {
+    if (key.name === "l" && (state.focusedPane as string) !== "search" && activeView !== "detail" && activeView !== "login") {
       dispatch({ type: "NAVIGATE", view: "login" })
       return
     }
 
     // "r" to refresh installed skills (when not typing in search, not on login view)
-    if (key.name === "r" && state.focusedPane !== "search" && state.activeView !== "detail" && state.activeView !== "login") {
+    if (key.name === "r" && (state.focusedPane as string) !== "search" && activeView !== "detail" && activeView !== "login") {
       dispatch({ type: "REFRESH_SKILLS" })
       return
     }
@@ -194,7 +195,7 @@ export function Layout() {
       <tab-select
         options={TAB_OPTIONS}
         focused={state.activeView !== "detail" && !state.showHelp}
-        selectedIndex={activeTabIndex >= 0 ? activeTabIndex : 0}
+        {...({ selectedIndex: activeTabIndex >= 0 ? activeTabIndex : 0 } as any)}
         selectedBackgroundColor={colors.tabActive}
         selectedTextColor={colors.tabText}
         textColor={colors.textDim}

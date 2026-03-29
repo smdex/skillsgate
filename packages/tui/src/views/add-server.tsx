@@ -201,16 +201,16 @@ export function AddServerView({ editServerId, onServerCountChange }: AddServerVi
             <input
               placeholder={field.placeholder}
               focused={i === focusedFieldIndex && !state.showHelp && !saving}
-              defaultValue={values[field.name]}
+              {...({ defaultValue: values[field.name] } as any)}
               onInput={(value: string) => handleFieldChange(field.name, value)}
-              onSubmit={() => {
+              onSubmit={(() => {
                 // When pressing Enter on the last field, save
                 if (i === FIELDS.length - 1) {
                   handleSave()
                 } else {
                   setFocusedFieldIndex(i + 1)
                 }
-              }}
+              }) as any}
             />
           </box>
         </box>

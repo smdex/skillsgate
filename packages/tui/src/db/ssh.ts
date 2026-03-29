@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
 import os from "node:os"
 import path from "node:path"
 import fs from "node:fs"
@@ -93,6 +93,50 @@ export async function testConnection(
     const msg = err instanceof Error ? err.message : String(err)
     return { ok: false, error: msg }
   }
+}
+
+export async function readRemoteFile(
+  server: RemoteServer,
+  remotePath: string,
+): Promise<string> {
+  const escaped = `'${remotePath.replace(/'/g, "'\\''")}'`
+  const result = await sshExec(server, `cat ${escaped}`)
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr.trim() || "Failed to read remote file")
+  }
+  return result.stdout
+}
+
+export async function writeRemoteFile(
+  server: RemoteServer,
+  remotePath: string,
+  content: string,
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const escaped = `'${remotePath.replace(/'/g, "'\\''")}'`
+    const command = `mkdir -p "$(dirname ${escaped})" && cat > ${escaped}`
+    const args = [...buildSshArgs(server), command]
+    const proc = spawn("ssh", args, {
+      stdio: ["pipe", "pipe", "pipe"],
+    })
+
+    let stderr = ""
+    proc.stderr.on("data", (data: Buffer) => {
+      stderr += data.toString("utf-8")
+    })
+
+    proc.on("error", (err) => reject(new Error(err.message)))
+    proc.on("close", (code) => {
+      if ((code ?? 1) === 0) {
+        resolve()
+      } else {
+        reject(new Error(stderr.trim() || `SSH exited with code ${code ?? 1}`))
+      }
+    })
+
+    proc.stdin.write(content, "utf-8")
+    proc.stdin.end()
+  })
 }
 
 // ---------- Remote Skill Scanner ----------

@@ -174,7 +174,7 @@ export function LoginView() {
             <input
               placeholder="XXXX-XXXX"
               focused={state.activeView === "login" && step === "code" && !state.showHelp}
-              onSubmit={handleCodeSubmit}
+              onSubmit={handleCodeSubmit as any}
             />
           </box>
           <text>{" "}</text>

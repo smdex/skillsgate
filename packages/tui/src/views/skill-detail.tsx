@@ -85,7 +85,7 @@ export function SkillDetailView() {
         : `/api/v1/skills/detail?path=${encodeURIComponent(skill.name)}`
       fetch(`https://api.skillsgate.ai${detailPath}`)
         .then(res => res.ok ? res.json() : null)
-        .then(data => {
+        .then((data: any) => {
           if (data?.content) {
             setContent(stripFrontmatter(data.content))
           } else {
@@ -410,12 +410,12 @@ export function SkillDetailView() {
           width: "30%",
           flexDirection: "column",
           backgroundColor: colors.bgAlt,
-          borderLeft: true,
+          border: true,
           borderColor: colors.border,
           paddingLeft: 1,
           paddingRight: 1,
           paddingTop: 1,
-        }}
+        } as any}
       >
         {/* Skill name */}
         <text fg={colors.primary}>

@@ -164,10 +164,10 @@ export function FavoritesView() {
         <box
           style={{
             width: "40%",
-            borderRight: true,
+            border: true,
             borderColor: colors.border,
             flexDirection: "column",
-          }}
+          } as any}
         >
           {/* List header */}
           <box style={{ height: 1, paddingLeft: 1, backgroundColor: colors.bgAlt }}>
@@ -336,7 +336,12 @@ function catalogSkillToEnriched(
     name: skill.name,
     description: skill.summary || skill.description || "",
     filePath: "",
+    canonicalPath: "",
     agents: [],
+    scope: "custom",
+    projectName: null,
+    hasSupportingFiles: false,
+    supportingFiles: [],
     metadata: {
       categories: skill.categories,
       capabilities: skill.capabilities,

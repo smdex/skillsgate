@@ -20,8 +20,16 @@ export interface EnrichedSkill {
   name: string
   description: string
   filePath: string
+  canonicalPath: string
   /** Which agents have this skill installed (by agent name) */
   agents: AgentType[]
+  scope: "global" | "project" | "custom"
+  projectName: string | null
+  hasSupportingFiles: boolean
+  supportingFiles: Array<{
+    relativePath: string
+    size: number
+  }>
   /** Frontmatter metadata from the SKILL.md */
   metadata: Record<string, unknown>
   /** Lock file entry if tracked */

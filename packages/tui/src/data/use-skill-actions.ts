@@ -1,5 +1,6 @@
 import { useCallback } from "react"
 import { useStore, useDispatch } from "../store/context.js"
+import { useDb } from "../db/context.js"
 import type { EnrichedSkill } from "../store/types.js"
 
 // CLI core imports -- these share the same Bun runtime
@@ -36,6 +37,7 @@ interface UseSkillActionsResult {
 export function useSkillActions(): UseSkillActionsResult {
   const state = useStore()
   const dispatch = useDispatch()
+  const { settings } = useDb()
 
   /**
    * Install a skill from its source (GitHub URL, SkillsGate slug, or install command).
@@ -68,6 +70,21 @@ export function useSkillActions(): UseSkillActionsResult {
         })
         return
       }
+
+      const defaultAgents = settings.get<string[]>("install.defaultAgents", [])
+      const mirrorAgents = settings.get<string[]>("sync.mirrorAgents", [])
+      const preferredNames =
+        defaultAgents.length > 0
+          ? Array.from(new Set([...defaultAgents, ...mirrorAgents]))
+          : Array.from(
+              new Set([
+                ...installedAgents.map((agent) => agent.name),
+                ...mirrorAgents,
+              ]),
+            )
+      const targetAgents = installedAgents.filter((agent) =>
+        preferredNames.includes(agent.name),
+      )
 
       let tmpDir: string
       if (source.type === "skillsgate") {
@@ -112,7 +129,7 @@ export function useSkillActions(): UseSkillActionsResult {
 
         for (const skillToInstall of targetSkills) {
           // Install to all detected agents
-          for (const agent of installedAgents) {
+          for (const agent of targetAgents) {
             const result = await installSkillForAgent(
               skillToInstall,
               agent,
@@ -141,7 +158,7 @@ export function useSkillActions(): UseSkillActionsResult {
           type: "SHOW_NOTIFICATION",
           notification: {
             type: "success",
-            message: `Installed ${targetSkills.length} skill(s): ${skillNames} to ${installedAgents.length} agent(s)`,
+            message: `Installed ${targetSkills.length} skill(s): ${skillNames} to ${targetAgents.length} agent(s)`,
           },
         })
       } finally {

@@ -1,9 +1,15 @@
 import { useState, useEffect } from "react"
+import crypto from "node:crypto"
+import { spawnSync } from "node:child_process"
+import fs from "node:fs"
+import os from "node:os"
+import path from "node:path"
 import { useKeyboard } from "@opentui/react"
 import { useStore, useDispatch } from "../store/context.js"
 import { useDb } from "../db/context.js"
 import { colors } from "../utils/colors.js"
 import type { RemoteSkill } from "../db/skills.js"
+import { readRemoteFile, writeRemoteFile } from "../db/ssh.js"
 
 interface ServerSkillsViewProps {
   serverId: string
@@ -61,6 +67,57 @@ export function ServerSkillsView({ serverId }: ServerSkillsViewProps) {
       return
     }
 
+    if (key.name === "e" && selectedSkill && server) {
+      const editor = process.env.VISUAL || process.env.EDITOR || "vi"
+      const tempPath = path.join(
+        os.tmpdir(),
+        `skillsgate-remote-${selectedSkill.id}.md`,
+      )
+      const initialContent = selectedSkill.content ?? ""
+      try {
+        fs.writeFileSync(tempPath, initialContent, "utf-8")
+        spawnSync(editor, [tempPath], { stdio: "inherit" })
+        const nextContent = fs.readFileSync(tempPath, "utf-8")
+        if (nextContent !== initialContent) {
+          writeRemoteFile(server, selectedSkill.remotePath, nextContent)
+            .then(async () => {
+              const refreshed = await readRemoteFile(server, selectedSkill.remotePath)
+              const contentHash = crypto
+                .createHash("sha256")
+                .update(refreshed, "utf-8")
+                .digest("hex")
+              skills.updateContent(serverId, selectedSkill.remotePath, refreshed, contentHash)
+              setSkillList(skills.listByServer(serverId))
+              dispatch({
+                type: "SHOW_NOTIFICATION",
+                notification: { type: "success", message: `Saved "${selectedSkill.name}"` },
+              })
+            })
+            .catch((err) => {
+              dispatch({
+                type: "SHOW_NOTIFICATION",
+                notification: {
+                  type: "error",
+                  message: err instanceof Error ? err.message : String(err),
+                },
+              })
+            })
+        }
+      } catch (err) {
+        dispatch({
+          type: "SHOW_NOTIFICATION",
+          notification: {
+            type: "error",
+            message: err instanceof Error ? err.message : String(err),
+          },
+        })
+      } finally {
+        try {
+          fs.unlinkSync(tempPath)
+        } catch {}
+      }
+    }
+
     // Esc = go back (handled by layout)
   })
 
@@ -97,10 +154,10 @@ export function ServerSkillsView({ serverId }: ServerSkillsViewProps) {
         <box
           style={{
             width: "40%",
-            borderRight: true,
+            border: true,
             borderColor: colors.border,
             flexDirection: "column",
-          }}
+          } as any}
         >
           <box style={{ height: 1, paddingLeft: 1, backgroundColor: colors.bgAlt }}>
             <text fg={colors.textDim}>REMOTE SKILLS</text>
@@ -150,7 +207,7 @@ export function ServerSkillsView({ serverId }: ServerSkillsViewProps) {
 
           {/* Bottom hints */}
           <box style={{ height: 1, paddingLeft: 1, backgroundColor: colors.bgAlt }}>
-            <text fg={colors.textDim}>i=install locally  Esc=back</text>
+            <text fg={colors.textDim}>i=install locally  e=edit  Esc=back</text>
           </box>
         </box>
 
@@ -234,7 +291,7 @@ function RemoteSkillDetail({ skill }: RemoteSkillDetailProps) {
         </box>
 
         <text>{" "}</text>
-        <text fg={colors.textDim}>i=install locally  Esc=back to server list</text>
+        <text fg={colors.textDim}>i=install locally  e=edit  Esc=back to server list</text>
         <text fg={colors.border}>---</text>
 
         {/* Skill content */}

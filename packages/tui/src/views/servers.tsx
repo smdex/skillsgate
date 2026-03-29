@@ -237,10 +237,10 @@ export function ServersView({ onServerCountChange }: ServersViewProps) {
         <box
           style={{
             width: "50%",
-            borderRight: true,
+            border: true,
             borderColor: colors.border,
             flexDirection: "column",
-          }}
+          } as any}
         >
           {/* Header */}
           <box style={{ height: 1, paddingLeft: 1, backgroundColor: colors.bgAlt }}>

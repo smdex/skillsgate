@@ -100,7 +100,7 @@ export function DiscoverView() {
       if (searchMode === "keyword") {
         if (!isAuthenticated) {
           dispatch({
-            type: "SET_NOTIFICATION",
+            type: "SHOW_NOTIFICATION",
             notification: { type: "info", message: "Sign in to use AI search (press l)" },
           })
           return
@@ -154,10 +154,10 @@ export function DiscoverView() {
                 : "Search by keyword... (Enter to search)"
             }
             focused={state.activeView === "discover" && !state.showHelp}
-            onSubmit={(value: string) => {
+            onSubmit={((value: string) => {
               setQuery(value)
               setSelectedIndex(0)
-            }}
+            }) as any}
           />
         ) : (
           <text fg={colors.textDim}>/ to search, Tab to cycle panes</text>
@@ -213,10 +213,10 @@ export function DiscoverView() {
         <box
           style={{
             width: "40%",
-            borderRight: true,
+            border: true,
             borderColor: state.focusedPane === "list" ? colors.primary : colors.border,
             flexDirection: "column",
-          }}
+          } as any}
         >
           {/* List header */}
           <box style={{ height: 1, paddingLeft: 1, backgroundColor: colors.bgAlt }}>
@@ -396,7 +396,12 @@ function catalogSkillToEnriched(skill: CatalogSkill): import("../store/types.js"
     name: skill.name,
     description: skill.summary || skill.description || "",
     filePath: "", // No local file for catalog items
+    canonicalPath: "",
     agents: [],
+    scope: "custom",
+    projectName: null,
+    hasSupportingFiles: false,
+    supportingFiles: [],
     metadata: {
       categories: skill.categories,
       capabilities: skill.capabilities,

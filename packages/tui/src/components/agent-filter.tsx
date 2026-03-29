@@ -58,11 +58,11 @@ export function AgentFilter() {
       style={{
         flexDirection: "column",
         width: 22,
-        borderRight: true,
+        border: true,
         borderColor: isFocused ? colors.primary : colors.border,
         backgroundColor: colors.bg,
         paddingTop: 0,
-      }}
+      } as any}
     >
       {/* Library section header */}
       <box style={{ paddingLeft: 1, height: 1, backgroundColor: colors.bgAlt }}>
