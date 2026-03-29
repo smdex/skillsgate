@@ -75,8 +75,12 @@ jobs:
           path: artifacts/
 
       - name: Prepare and publish platform packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          RELEASE_REF_NAME: ${{ github.ref_name }}
         run: |
-          VERSION=${GITHUB_REF_NAME#tui-v}
+          VERSION="${RELEASE_REF_NAME#tui-v}"
+          test -n "$VERSION"
           for pkg in tui-darwin-arm64 tui-darwin-x64 tui-linux-x64 tui-win32-x64; do
             mkdir -p "dist/$pkg"
             ls artifacts/$pkg/
@@ -100,12 +104,13 @@ jobs:
           PKGJSON
             cd "dist/$pkg" && npm publish --access public --provenance || true && cd ../..
           done
+      - name: Publish main package
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish main package
+          RELEASE_REF_NAME: ${{ github.ref_name }}
         run: |
-          VERSION=${GITHUB_REF_NAME#tui-v}
+          VERSION="${RELEASE_REF_NAME#tui-v}"
+          test -n "$VERSION"
           cd packages/tui
           npm version $VERSION --no-git-tag-version --allow-same-version
           # Update optionalDependencies to match the release version
@@ -117,9 +122,6 @@ jobs:
             require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
           "
           npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
