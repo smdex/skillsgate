@@ -4,11 +4,13 @@ import path from "node:path"
 import fs from "node:fs/promises"
 import { execFile } from "node:child_process"
 import matter from "gray-matter"
+import { app } from "electron"
 import { openDb } from "./db/index"
 import { SettingsStore } from "./db/settings"
 import { RemoteServerStore } from "./db/servers"
 import { RemoteSkillStore } from "./db/skills"
-import { testConnection, syncRemoteServer } from "./db/ssh"
+import { testConnection, syncRemoteServer, readRemoteFile, writeRemoteFile } from "./db/ssh"
+import { checkForAppUpdates, getUpdateState, quitAndInstallUpdate } from "./auto-updater"
 
 // ---------------------------------------------------------------------------
 // Agent registry (mirrored from packages/cli/src/core/agents.ts)
@@ -303,6 +305,36 @@ interface ParsedSkill {
   filePath: string
 }
 
+interface SupportingFile {
+  relativePath: string
+  size: number
+}
+
+const CUSTOM_SCAN_PATHS_KEY = "scan.customPaths"
+const DEFAULT_AGENTS_KEY = "install.defaultAgents"
+const MIRROR_AGENTS_KEY = "sync.mirrorAgents"
+
+const PROJECT_PROBES = [
+  { subpath: ".claude/skills" },
+  { subpath: ".cursor/skills" },
+  { subpath: ".cursor/rules" },
+  { subpath: ".codex/skills" },
+  { subpath: ".github/skills" },
+  { subpath: ".windsurf/skills" },
+  { subpath: ".continue/skills" },
+  { subpath: ".cline/skills" },
+  { subpath: ".amp/skills" },
+  { subpath: ".opencode/skills" },
+  { subpath: ".goose/skills" },
+  { subpath: ".junie/skills" },
+  { subpath: ".kilo-code/skills" },
+  { subpath: ".pear-ai/skills" },
+  { subpath: ".roo-code/skills" },
+  { subpath: ".trae/skills" },
+  { subpath: ".zed/skills" },
+  { subpath: ".agents/skills" },
+]
+
 async function parseSkillMd(filePath: string): Promise<ParsedSkill | null> {
   try {
     const raw = await fs.readFile(filePath, "utf-8")
@@ -323,6 +355,203 @@ async function parseSkillMd(filePath: string): Promise<ParsedSkill | null> {
   } catch {
     return null
   }
+}
+
+function getScopeForPath(resolvedPath: string): "global" | "project" | "custom" {
+  const globalRoots = [
+    CANONICAL_SKILLS_DIR,
+    ...Object.values(agentRegistry).map((agent) => agent.globalSkillsDir),
+  ].map((root) => path.resolve(root))
+
+  if (globalRoots.some((root) => resolvedPath.startsWith(root))) {
+    return "global"
+  }
+
+  if (resolvedPath.split(path.sep).some((segment) => segment.startsWith("."))) {
+    return "project"
+  }
+
+  return "custom"
+}
+
+function getProjectNameForPath(resolvedPath: string): string | null {
+  const parts = path.resolve(resolvedPath).split(path.sep).filter(Boolean)
+  for (let i = 1; i < parts.length; i++) {
+    if (parts[i].startsWith(".")) {
+      return parts[i - 1] || null
+    }
+  }
+  return null
+}
+
+async function listSupportingFiles(skillDir: string): Promise<SupportingFile[]> {
+  const files: SupportingFile[] = []
+
+  async function walk(currentDir: string, prefix = ""): Promise<void> {
+    const entries = await fs.readdir(currentDir, { withFileTypes: true })
+    for (const entry of entries) {
+      const absolutePath = path.join(currentDir, entry.name)
+      const relativePath = prefix ? path.join(prefix, entry.name) : entry.name
+
+      if (entry.isDirectory()) {
+        await walk(absolutePath, relativePath)
+        continue
+      }
+
+      if (!entry.isFile() || relativePath === "SKILL.md") continue
+
+      const stat = await fs.stat(absolutePath)
+      files.push({
+        relativePath: relativePath.split(path.sep).join("/"),
+        size: stat.size,
+      })
+    }
+  }
+
+  try {
+    await walk(skillDir)
+  } catch {
+    return []
+  }
+
+  return files.sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+}
+
+function isSkillPathAllowed(resolvedPath: string): boolean {
+  return (
+    Object.values(agentRegistry).some((agent) =>
+      resolvedPath.startsWith(path.resolve(agent.globalSkillsDir)),
+    ) || resolvedPath.startsWith(path.resolve(CANONICAL_SKILLS_DIR))
+  )
+}
+
+function getExpandedTargetAgents(requestedAgentNames: string[]): AgentEntry[] {
+  const configuredDefaultAgents = settingsStore?.get<string[]>(DEFAULT_AGENTS_KEY, []) ?? []
+  const configuredMirrorAgents = settingsStore?.get<string[]>(MIRROR_AGENTS_KEY, []) ?? []
+
+  const baseNames =
+    requestedAgentNames.length > 0
+      ? requestedAgentNames
+      : configuredDefaultAgents.length > 0
+        ? configuredDefaultAgents
+        : []
+
+  const resolvedBaseNames = baseNames.length > 0 ? baseNames : Object.keys(agentRegistry)
+  const finalNames = Array.from(
+    new Set([...resolvedBaseNames, ...configuredMirrorAgents]),
+  )
+
+  return finalNames
+    .map((name) => agentRegistry[name])
+    .filter((value): value is AgentEntry => Boolean(value))
+}
+
+async function collectSkillsFromRoot(
+  rootPath: string,
+  scopeHint: "custom" | "project",
+): Promise<
+  Array<{
+    name: string
+    description: string
+    path: string
+    canonicalPath: string
+    agents: string[]
+    agentShortCodes: string[]
+    scope: "global" | "project" | "custom"
+    projectName: string | null
+    hasSupportingFiles: boolean
+    supportingFiles: SupportingFile[]
+    source?: string
+    sourceType?: string
+    installedAt?: string
+    updatedAt?: string
+    folderName: string
+  }>
+> {
+  const results: Array<{
+    name: string
+    description: string
+    path: string
+    canonicalPath: string
+    agents: string[]
+    agentShortCodes: string[]
+    scope: "global" | "project" | "custom"
+    projectName: string | null
+    hasSupportingFiles: boolean
+    supportingFiles: SupportingFile[]
+    source?: string
+    sourceType?: string
+    installedAt?: string
+    updatedAt?: string
+    folderName: string
+  }> = []
+
+  const resolvedRoot = path.resolve(rootPath.replace(/^~(?=$|\/|\\)/, home))
+  const lock = await readSkillLock()
+
+  async function maybeCollectSkillDir(skillDir: string, scope: "project" | "custom") {
+    const skillMdPath = path.join(skillDir, "SKILL.md")
+    if (!(await fileExists(skillMdPath))) return
+
+    const canonicalPath = await fs.realpath(skillDir).catch(() => skillDir)
+    const parsed = await parseSkillMd(skillMdPath)
+    const folderName = path.basename(skillDir)
+    const lockEntry = lock.skills[folderName]
+    const supportingFiles = await listSupportingFiles(canonicalPath)
+
+    results.push({
+      name: parsed?.name || folderName,
+      description: parsed?.description || "",
+      path: skillDir,
+      canonicalPath,
+      agents: [],
+      agentShortCodes: [],
+      scope,
+      projectName: scope === "project" ? getProjectNameForPath(skillDir) : null,
+      hasSupportingFiles: supportingFiles.length > 0,
+      supportingFiles,
+      source: lockEntry?.source,
+      sourceType: lockEntry?.sourceType,
+      installedAt: lockEntry?.installedAt,
+      updatedAt: lockEntry?.updatedAt,
+      folderName,
+    })
+  }
+
+  await maybeCollectSkillDir(resolvedRoot, scopeHint)
+
+  let rootEntries: Awaited<ReturnType<typeof fs.readdir>> = []
+  try {
+    rootEntries = await fs.readdir(resolvedRoot, { withFileTypes: true })
+  } catch {
+    return results
+  }
+
+  for (const entry of rootEntries) {
+    if (!entry.isDirectory()) continue
+    const full = path.join(resolvedRoot, entry.name)
+    await maybeCollectSkillDir(full, scopeHint)
+  }
+
+  for (const entry of rootEntries) {
+    if (!entry.isDirectory()) continue
+    const projectRoot = path.join(resolvedRoot, entry.name)
+    for (const probe of PROJECT_PROBES) {
+      const probeDir = path.join(projectRoot, probe.subpath)
+      let entries: Awaited<ReturnType<typeof fs.readdir>> = []
+      try {
+        entries = await fs.readdir(probeDir, { withFileTypes: true })
+      } catch {
+        continue
+      }
+      for (const skillEntry of entries) {
+        if (!skillEntry.isDirectory()) continue
+        await maybeCollectSkillDir(path.join(probeDir, skillEntry.name), "project")
+      }
+    }
+  }
+
+  return results
 }
 
 // ---------------------------------------------------------------------------
@@ -367,8 +596,13 @@ async function listInstalledSkills(): Promise<
     name: string
     description: string
     path: string
+    canonicalPath: string
     agents: string[]
     agentShortCodes: string[]
+    scope: "global" | "project" | "custom"
+    projectName: string | null
+    hasSupportingFiles: boolean
+    supportingFiles: SupportingFile[]
     source?: string
     sourceType?: string
     installedAt?: string
@@ -413,9 +647,13 @@ async function listInstalledSkills(): Promise<
 
         const skillMdPath = path.join(skillDir, "SKILL.md")
         const parsed = await parseSkillMd(skillMdPath)
+        const supportingFiles = await listSupportingFiles(skillDir)
+        const scope = getScopeForPath(skillDir)
+        const projectName =
+          scope === "project" ? getProjectNameForPath(skillDir) : null
 
         const skillName = parsed?.name || entry.name
-        const existing = skillMap.get(skillName)
+        const existing = skillMap.get(skillDir)
 
         if (existing) {
           if (!existing.agents.includes(agent.displayName)) {
@@ -424,12 +662,17 @@ async function listInstalledSkills(): Promise<
           }
         } else {
           const lockEntry = lock.skills[entry.name]
-          skillMap.set(skillName, {
+          skillMap.set(skillDir, {
             name: skillName,
             description: parsed?.description || "",
             path: skillDir,
+            canonicalPath: skillDir,
             agents: [agent.displayName],
             agentShortCodes: [agent.shortCode],
+            scope,
+            projectName,
+            hasSupportingFiles: supportingFiles.length > 0,
+            supportingFiles,
             source: lockEntry?.source,
             sourceType: lockEntry?.sourceType,
             installedAt: lockEntry?.installedAt,
@@ -440,6 +683,16 @@ async function listInstalledSkills(): Promise<
       }
     } catch {
       // Directory does not exist or is not readable
+    }
+  }
+
+  const customScanPaths = settingsStore?.get<string[]>(CUSTOM_SCAN_PATHS_KEY, []) ?? []
+  for (const customPath of customScanPaths) {
+    const collected = await collectSkillsFromRoot(customPath, "custom")
+    for (const item of collected) {
+      if (!skillMap.has(item.canonicalPath)) {
+        skillMap.set(item.canonicalPath, item)
+      }
     }
   }
 
@@ -682,10 +935,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("skill:read-content", async (_event, skillPath: string) => {
     // Validate the path is within allowed skill directories
     const resolved = path.resolve(skillPath)
-    const isAllowed = Object.values(agentRegistry).some(
-      (agent) => resolved.startsWith(path.resolve(agent.globalSkillsDir))
-    ) || resolved.startsWith(path.resolve(CANONICAL_SKILLS_DIR))
-    if (!isAllowed) {
+    if (!isSkillPathAllowed(resolved)) {
       throw new Error("Access denied: path is outside skill directories")
     }
 
@@ -704,6 +954,29 @@ export function registerIpcHandlers(): void {
       return ""
     }
   })
+
+  ipcMain.handle("skill:list-supporting-files", async (_event, skillPath: string) => {
+    const resolved = path.resolve(skillPath)
+    if (!isSkillPathAllowed(resolved)) {
+      throw new Error("Access denied: path is outside skill directories")
+    }
+    return listSupportingFiles(resolved)
+  })
+
+  ipcMain.handle(
+    "skill:read-supporting-file",
+    async (_event, skillPath: string, relativePath: string) => {
+      const resolved = path.resolve(skillPath)
+      if (!isSkillPathAllowed(resolved)) {
+        throw new Error("Access denied: path is outside skill directories")
+      }
+      const filePath = path.resolve(resolved, relativePath)
+      if (!filePath.startsWith(resolved)) {
+        throw new Error("Access denied: invalid supporting file path")
+      }
+      return fs.readFile(filePath, "utf-8")
+    },
+  )
 
   // Install a skill from a source (GitHub owner/repo, URL, or local path)
   ipcMain.handle(
@@ -768,20 +1041,11 @@ export function registerIpcHandlers(): void {
       }
 
       // Determine target agents
-      const targetAgents: AgentEntry[] = []
-      if (agentNames.length === 0) {
-        // Install to all detected agents
-        const detected = await detectAgents()
-        for (const d of detected) {
-          const entry = agentRegistry[d.name]
-          if (entry) targetAgents.push(entry)
-        }
-      } else {
-        for (const name of agentNames) {
-          const entry = agentRegistry[name]
-          if (entry) targetAgents.push(entry)
-        }
-      }
+      const detected = await detectAgents()
+      const detectedNames = new Set(detected.map((agent) => agent.name))
+      const targetAgents = getExpandedTargetAgents(agentNames).filter((agent) =>
+        detectedNames.has(agent.name),
+      )
 
       const results: Array<{
         skillName: string
@@ -830,6 +1094,69 @@ export function registerIpcHandlers(): void {
       }
 
       return results
+    },
+  )
+
+  ipcMain.handle(
+    "skills:create",
+    async (
+      _event,
+      data: { name: string; description?: string; content?: string; agentNames?: string[] },
+    ) => {
+      const trimmedName = data.name.trim()
+      if (!trimmedName) {
+        throw new Error("Skill name is required")
+      }
+
+      const safeName = sanitizeName(trimmedName)
+      const canonicalDir = path.join(CANONICAL_SKILLS_DIR, safeName)
+      const skillFilePath = path.join(canonicalDir, "SKILL.md")
+
+      if (await dirExists(canonicalDir)) {
+        throw new Error(`Skill "${trimmedName}" already exists`)
+      }
+
+      await fs.mkdir(canonicalDir, { recursive: true })
+      const content = (data.content?.trim() || `---
+name: ${safeName}
+description: ${(data.description?.trim() || trimmedName).replace(/\n/g, " ")}
+---
+
+# ${trimmedName}
+
+## Instructions
+
+Add your skill instructions here.
+`).trimEnd() + "\n"
+      await fs.writeFile(skillFilePath, content, "utf-8")
+
+      const detected = await detectAgents()
+      const detectedNames = new Set(detected.map((agent) => agent.name))
+      const targetAgents = getExpandedTargetAgents(data.agentNames ?? []).filter((agent) =>
+        detectedNames.has(agent.name),
+      )
+
+      for (const agent of targetAgents) {
+        await installSkillToAgent(canonicalDir, trimmedName, agent)
+      }
+
+      const lock = await readSkillLock()
+      const now = new Date().toISOString()
+      lock.skills[safeName] = {
+        source: canonicalDir,
+        sourceType: "local",
+        originalUrl: canonicalDir,
+        skillFolderHash: "",
+        installedAt: now,
+        updatedAt: now,
+      }
+      await writeSkillLock(lock)
+
+      return {
+        name: trimmedName,
+        path: canonicalDir,
+        targets: targetAgents.map((agent) => agent.name),
+      }
     },
   )
 
@@ -1032,6 +1359,31 @@ export function registerIpcHandlers(): void {
     return skillStore.listByServer(serverId)
   })
 
+  ipcMain.handle("servers:read-skill", async (_event, serverId: string, remotePath: string) => {
+    const server = serverStore.get(serverId)
+    if (!server) {
+      throw new Error("Server not found")
+    }
+    return readRemoteFile(server, remotePath)
+  })
+
+  ipcMain.handle(
+    "servers:write-skill",
+    async (_event, serverId: string, remotePath: string, content: string) => {
+      const server = serverStore.get(serverId)
+      if (!server) {
+        throw new Error("Server not found")
+      }
+      await writeRemoteFile(server, remotePath, content)
+      const contentHash = require("node:crypto")
+        .createHash("sha256")
+        .update(content, "utf-8")
+        .digest("hex")
+      skillStore.updateContent(serverId, remotePath, content, contentHash)
+      return { ok: true }
+    },
+  )
+
   ipcMain.handle("servers:count", () => {
     return serverStore.count()
   })
@@ -1053,6 +1405,26 @@ export function registerIpcHandlers(): void {
   })
 
   // -------------------------------------------------------------------------
+  // Updates
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle("updates:get-state", () => {
+    return getUpdateState()
+  })
+
+  ipcMain.handle("updates:check", async () => {
+    return checkForAppUpdates()
+  })
+
+  ipcMain.handle("updates:install", () => {
+    quitAndInstallUpdate()
+  })
+
+  ipcMain.handle("app:get-version", () => {
+    return app.getVersion()
+  })
+
+  // -------------------------------------------------------------------------
   // Skill editing & management
   // -------------------------------------------------------------------------
 
@@ -1060,10 +1432,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("skill:write-content", async (_, filePath: string, content: string) => {
     // Validate the path is within allowed skill directories
     const resolved = path.resolve(filePath)
-    const isAllowed = Object.values(agentRegistry).some(
-      (agent) => resolved.startsWith(path.resolve(agent.globalSkillsDir))
-    ) || resolved.startsWith(path.resolve(CANONICAL_SKILLS_DIR))
-    if (!isAllowed) {
+    if (!isSkillPathAllowed(resolved)) {
       throw new Error("Access denied: path is outside skill directories")
     }
 
@@ -1078,10 +1447,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("skill:open-in-finder", (_, filePath: string) => {
     // Validate the path is within allowed skill directories
     const resolved = path.resolve(filePath)
-    const isAllowed = Object.values(agentRegistry).some(
-      (agent) => resolved.startsWith(path.resolve(agent.globalSkillsDir))
-    ) || resolved.startsWith(path.resolve(CANONICAL_SKILLS_DIR))
-    if (!isAllowed) {
+    if (!isSkillPathAllowed(resolved)) {
       throw new Error("Access denied: path is outside skill directories")
     }
     shell.showItemInFolder(resolved)
@@ -1099,6 +1465,25 @@ export function registerIpcHandlers(): void {
       throw new Error(`Failed to remove: ${err instanceof Error ? err.message : String(err)}`)
     }
   })
+
+  ipcMain.handle(
+    "skills:add-to-agent",
+    async (_event, skillName: string, canonicalPath: string, agentName: string) => {
+      const safeName = sanitizeName(skillName)
+      const agent = agentRegistry[agentName]
+      if (!agent) throw new Error(`Unknown agent: ${agentName}`)
+
+      const resolvedCanonical = path.resolve(canonicalPath)
+      if (!resolvedCanonical.startsWith(path.resolve(CANONICAL_SKILLS_DIR))) {
+        throw new Error("Access denied: canonical path is outside local skill storage")
+      }
+
+      const result = await installSkillToAgent(resolvedCanonical, safeName, agent)
+      if (!result.success) {
+        throw new Error(result.error || "Failed to add skill to target agent")
+      }
+    },
+  )
 }
 
 // Export for use by file-watcher

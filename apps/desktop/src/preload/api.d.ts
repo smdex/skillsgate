@@ -11,8 +11,16 @@ declare global {
     name: string
     description: string
     path: string
+    canonicalPath: string
     agents: string[]
     agentShortCodes: string[]
+    scope: "global" | "project" | "custom"
+    projectName: string | null
+    hasSupportingFiles: boolean
+    supportingFiles: Array<{
+      relativePath: string
+      size: number
+    }>
     source?: string
     sourceType?: string
     installedAt?: string
@@ -73,6 +81,22 @@ declare global {
     error?: string
   }
 
+  interface UpdateState {
+    status:
+      | "idle"
+      | "checking"
+      | "available"
+      | "downloading"
+      | "downloaded"
+      | "not-available"
+      | "error"
+    version: string
+    availableVersion?: string
+    downloadedVersion?: string
+    progressPercent?: number
+    message?: string
+  }
+
   interface ElectronAPI {
     detectAgents: () => Promise<DetectedAgent[]>
     listInstalled: () => Promise<InstalledSkill[]>
@@ -81,12 +105,27 @@ declare global {
       agents: string[],
       scope: string,
     ) => Promise<InstallResult[]>
+    createSkill: (data: {
+      name: string
+      description?: string
+      content?: string
+      agentNames?: string[]
+    }) => Promise<{ name: string; path: string; targets: string[] }>
     removeSkill: (name: string) => Promise<void>
     updateSkill: (name: string) => Promise<void>
     readSkillContent: (path: string) => Promise<string>
+    listSupportingFiles: (
+      path: string,
+    ) => Promise<Array<{ relativePath: string; size: number }>>
+    readSupportingFile: (path: string, relativePath: string) => Promise<string>
     writeSkillContent: (filePath: string, content: string) => Promise<void>
     openInFinder: (filePath: string) => Promise<void>
     removeFromAgent: (skillName: string, agentName: string) => Promise<void>
+    addToAgent: (
+      skillName: string,
+      canonicalPath: string,
+      agentName: string,
+    ) => Promise<void>
 
     // Auth
     authLoad: () => Promise<StoredAuth | null>
@@ -119,6 +158,12 @@ declare global {
     serversTest: (id: string) => Promise<{ ok: boolean; error?: string }>
     serversSync: (id: string) => Promise<SyncResult>
     serversSkills: (serverId: string) => Promise<RemoteSkill[]>
+    serversReadSkill: (serverId: string, remotePath: string) => Promise<string>
+    serversWriteSkill: (
+      serverId: string,
+      remotePath: string,
+      content: string,
+    ) => Promise<{ ok: boolean }>
     serversCount: () => Promise<number>
 
     // Settings
@@ -126,9 +171,15 @@ declare global {
     settingsSet: (key: string, value: unknown) => Promise<void>
     settingsAll: () => Promise<Record<string, unknown>>
 
+    updatesGetState: () => Promise<UpdateState>
+    updatesCheck: () => Promise<UpdateState>
+    updatesInstall: () => Promise<void>
+    appGetVersion: () => Promise<string>
+
     onSkillsUpdated: (
       callback: (skills: InstalledSkill[]) => void,
     ) => () => void
+    onUpdateState: (callback: (state: UpdateState) => void) => () => void
   }
 
   interface Window {

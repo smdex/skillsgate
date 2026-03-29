@@ -149,6 +149,16 @@ function renderMarkdown(raw: string): string {
   return sanitizeHtml(marked.parse(content) as string)
 }
 
+interface DragSkillPayload {
+  name: string
+  canonicalPath: string
+}
+
+interface DragToast {
+  type: "success" | "error"
+  message: string
+}
+
 // --------------------------------------------------------------------------
 // Left Sidebar Panel
 // --------------------------------------------------------------------------
@@ -161,6 +171,18 @@ interface LeftSidebarProps {
   onSelectAgent: (agent: string | null) => void
   activeFilter: "all" | "favorites"
   onFilterChange: (filter: "all" | "favorites") => void
+  collections: Record<string, string[]>
+  collectionCounts: Record<string, number>
+  selectedCollection: string | null
+  onSelectCollection: (collection: string | null) => void
+  onCreateCollection: () => void
+  onRenameCollection: (name: string) => void
+  onDeleteCollection: (name: string) => void
+  dragSkill: DragSkillPayload | null
+  dragOverTarget: string | null
+  onDragEnterTarget: (target: string | null) => void
+  onDropOnAgent: (agentDisplayName: string) => void
+  onDropOnCollection: (collectionName: string) => void
 }
 
 function LeftSidebar({
@@ -171,6 +193,18 @@ function LeftSidebar({
   onSelectAgent,
   activeFilter,
   onFilterChange,
+  collections,
+  collectionCounts,
+  selectedCollection,
+  onSelectCollection,
+  onCreateCollection,
+  onRenameCollection,
+  onDeleteCollection,
+  dragSkill,
+  dragOverTarget,
+  onDragEnterTarget,
+  onDropOnAgent,
+  onDropOnCollection,
 }: LeftSidebarProps) {
   return (
     <aside className="w-48 flex-shrink-0 flex flex-col bg-surface border-r border-border overflow-y-auto">
@@ -243,8 +277,23 @@ function LeftSidebar({
                 className={`flex items-center justify-between px-2 py-1.5 rounded-md text-[12px] tracking-wide font-medium transition-colors text-left ${
                   selectedAgent === agent.displayName
                     ? "bg-surface-hover text-foreground"
+                    : dragOverTarget === `agent:${agent.displayName}`
+                      ? "bg-surface-hover/70 ring-1 ring-accent text-foreground"
                     : "text-muted hover:text-foreground hover:bg-surface-hover"
                 }`}
+                onDragOver={(e) => {
+                  if (!dragSkill) return
+                  e.preventDefault()
+                  onDragEnterTarget(`agent:${agent.displayName}`)
+                }}
+                onDragLeave={() => {
+                  if (dragOverTarget === `agent:${agent.displayName}`) onDragEnterTarget(null)
+                }}
+                onDrop={(e) => {
+                  if (!dragSkill) return
+                  e.preventDefault()
+                  onDropOnAgent(agent.displayName)
+                }}
               >
                 <span className="truncate">{agent.displayName}</span>
                 <span
@@ -262,7 +311,76 @@ function LeftSidebar({
         </div>
       )}
 
-      {/* Servers section (placeholder) */}
+      <div className="px-3 pt-3 pb-2">
+        <div className="flex items-center justify-between px-2 mb-2">
+          <h3 className="text-[10px] uppercase tracking-widest font-semibold text-muted">
+            Collections
+          </h3>
+          <button
+            onClick={onCreateCollection}
+            className="text-[11px] text-muted hover:text-foreground"
+            title="Create collection"
+          >
+            +
+          </button>
+        </div>
+        <nav className="flex flex-col gap-0.5">
+          {Object.keys(collections).length === 0 ? (
+            <p className="text-[11px] text-muted px-2 italic">None yet</p>
+          ) : (
+            Object.keys(collections)
+              .sort()
+              .map((name) => (
+                <div key={name} className="group flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      onFilterChange("all")
+                      onSelectAgent(null)
+                      onSelectCollection(selectedCollection === name ? null : name)
+                    }}
+                    className={`flex flex-1 items-center justify-between px-2 py-1.5 rounded-md text-[12px] tracking-wide font-medium transition-colors text-left ${
+                      selectedCollection === name
+                        ? "bg-surface-hover text-foreground"
+                        : dragOverTarget === `collection:${name}`
+                          ? "bg-surface-hover/70 ring-1 ring-accent shadow-[0_0_0_1px_rgba(255,255,255,0.06)] text-foreground scale-[1.01]"
+                          : "text-muted hover:text-foreground hover:bg-surface-hover"
+                    }`}
+                    onDragOver={(e) => {
+                      if (!dragSkill) return
+                      e.preventDefault()
+                      onDragEnterTarget(`collection:${name}`)
+                    }}
+                    onDragLeave={() => {
+                      if (dragOverTarget === `collection:${name}`) onDragEnterTarget(null)
+                    }}
+                    onDrop={(e) => {
+                      if (!dragSkill) return
+                      e.preventDefault()
+                      onDropOnCollection(name)
+                    }}
+                  >
+                    <span className="truncate">{name}</span>
+                    <span className="text-[10px] font-mono">{collectionCounts[name] || 0}</span>
+                  </button>
+                  <button
+                    onClick={() => onRenameCollection(name)}
+                    className="hidden group-hover:inline text-[10px] text-muted hover:text-foreground"
+                    title="Rename collection"
+                  >
+                    ✎
+                  </button>
+                  <button
+                    onClick={() => onDeleteCollection(name)}
+                    className="hidden group-hover:inline text-[10px] text-muted hover:text-red-400"
+                    title="Delete collection"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))
+          )}
+        </nav>
+      </div>
       <div className="px-3 pt-3 pb-4 mt-auto">
         <h3 className="text-[10px] uppercase tracking-widest font-semibold text-muted mb-2 px-2">
           Servers
@@ -286,7 +404,12 @@ interface MiddlePanelProps {
   selectedSkillName: string | null
   onSelectSkill: (skill: InstalledSkill) => void
   selectedAgent: string | null
+  selectedCollection: string | null
   onClearFilters: () => void
+  onCreateSkill: () => void
+  dragSkill: DragSkillPayload | null
+  onDragSkillStart: (skill: InstalledSkill) => void
+  onDragSkillEnd: () => void
 }
 
 function MiddlePanel({
@@ -298,12 +421,26 @@ function MiddlePanel({
   selectedSkillName,
   onSelectSkill,
   selectedAgent,
+  selectedCollection,
   onClearFilters,
+  onCreateSkill,
+  dragSkill,
+  onDragSkillStart,
+  onDragSkillEnd,
 }: MiddlePanelProps) {
   return (
     <div className="w-72 flex-shrink-0 flex flex-col border-r border-border bg-background">
       {/* Search input */}
       <div className="p-3 border-b border-border">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-[10px] uppercase tracking-widest text-muted">Local Library</p>
+          <button
+            onClick={onCreateSkill}
+            className="rounded-md border border-border px-2 py-1 text-[11px] text-foreground hover:bg-surface-hover"
+          >
+            New Skill
+          </button>
+        </div>
         <div className="relative">
           <div className="absolute inset-y-0 left-2.5 flex items-center pointer-events-none">
             <SearchIcon size={14} />
@@ -342,7 +479,7 @@ function MiddlePanel({
       <div className="px-3 py-2 text-[10px] uppercase tracking-widest text-muted">
         {loading
           ? "Scanning..."
-          : `${filteredSkills.length} skill${filteredSkills.length !== 1 ? "s" : ""}${selectedAgent ? ` in ${selectedAgent}` : ""}`}
+          : `${filteredSkills.length} skill${filteredSkills.length !== 1 ? "s" : ""}${selectedAgent ? ` in ${selectedAgent}` : ""}${selectedCollection ? ` in ${selectedCollection}` : ""}`}
       </div>
 
       {/* Scrollable skill list */}
@@ -383,11 +520,19 @@ function MiddlePanel({
           <div className="flex flex-col gap-0.5">
             {filteredSkills.map((skill) => (
               <button
-                key={skill.name}
+                key={skill.canonicalPath}
                 onClick={() => onSelectSkill(skill)}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = "move"
+                  onDragSkillStart(skill)
+                }}
+                onDragEnd={() => onDragSkillEnd()}
                 className={`flex items-center justify-between w-full px-2.5 py-2 rounded-md text-left transition-colors ${
                   selectedSkillName === skill.name
                     ? "bg-surface-hover text-foreground"
+                    : dragSkill?.canonicalPath === skill.canonicalPath
+                      ? "opacity-60 ring-1 ring-accent/40"
                     : "text-muted hover:text-foreground hover:bg-surface-hover"
                 }`}
               >
@@ -514,13 +659,18 @@ interface RightPanelProps {
   skill: InstalledSkill | null
   content: string | null
   contentLoading: boolean
+  collections: Record<string, string[]>
   onContentSaved: (newContent: string) => void
   onSkillRemoved: () => void
+  onToggleCollection: (collectionName: string, skill: InstalledSkill) => void
+  onCreateCollection: () => void
 }
 
-function RightPanel({ skill, content, contentLoading, onContentSaved, onSkillRemoved }: RightPanelProps) {
+function RightPanel({ skill, content, contentLoading, collections, onContentSaved, onSkillRemoved, onToggleCollection, onCreateCollection }: RightPanelProps) {
   const [editMode, setEditMode] = useState(false)
   const [editContent, setEditContent] = useState("")
+  const [supportingPreview, setSupportingPreview] = useState("")
+  const [selectedSupportingFile, setSelectedSupportingFile] = useState<string | null>(null)
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [showRemoveDialog, setShowRemoveDialog] = useState(false)
 
@@ -528,9 +678,41 @@ function RightPanel({ skill, content, contentLoading, onContentSaved, onSkillRem
   useEffect(() => {
     setEditMode(false)
     setEditContent("")
+    setSupportingPreview("")
+    setSelectedSupportingFile(null)
     setSaveStatus("idle")
     setShowRemoveDialog(false)
   }, [skill?.name])
+
+  useEffect(() => {
+    if (!skill?.path || !skill.supportingFiles.length) {
+      setSupportingPreview("")
+      setSelectedSupportingFile(null)
+      return
+    }
+
+    const firstFile = skill.supportingFiles[0]?.relativePath ?? null
+    if (!firstFile) return
+
+    let cancelled = false
+    setSelectedSupportingFile(firstFile)
+    electronAPI
+      .readSupportingFile(skill.path, firstFile)
+      .then((value) => {
+        if (!cancelled) {
+          setSupportingPreview(value)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSupportingPreview("Preview unavailable.")
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [skill?.path, skill?.supportingFiles])
 
   const isLocalSkill = !!(skill?.path)
 
@@ -569,6 +751,18 @@ function RightPanel({ skill, content, contentLoading, onContentSaved, onSkillRem
   const handleOpenInFinder = () => {
     if (!skill?.path) return
     electronAPI.openInFinder(skill.path + "/SKILL.md")
+  }
+
+  const handleSupportingFileSelect = async (relativePath: string) => {
+    if (!skill?.path) return
+    setSelectedSupportingFile(relativePath)
+    try {
+      const value = await electronAPI.readSupportingFile(skill.path, relativePath)
+      setSupportingPreview(value)
+    } catch (err) {
+      console.error("Failed to read supporting file:", err)
+      setSupportingPreview("Preview unavailable.")
+    }
   }
 
   const handleDeleteClick = () => {
@@ -678,11 +872,60 @@ function RightPanel({ skill, content, contentLoading, onContentSaved, onSkillRem
             <div className="flex items-center gap-1.5">
               <AgentDots agents={skill.agents} />
             </div>
+            <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted">
+              <span className="rounded border border-border px-2 py-0.5">
+                scope: {skill.scope}
+              </span>
+              {skill.projectName && (
+                <span className="rounded border border-border px-2 py-0.5">
+                  project: {skill.projectName}
+                </span>
+              )}
+              <span className="rounded border border-border px-2 py-0.5">
+                supporting files: {skill.supportingFiles.length}
+              </span>
+            </div>
             {skill.source && (
               <p className="text-[11px] text-muted font-mono mt-2">
                 {skill.source}
               </p>
             )}
+            <p className="text-[11px] text-muted font-mono mt-2 break-all">
+              {skill.canonicalPath}
+            </p>
+            <div className="mt-3">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-[10px] uppercase tracking-widest text-muted">Collections</p>
+                <button
+                  onClick={onCreateCollection}
+                  className="text-[11px] text-muted hover:text-foreground"
+                >
+                  +
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {Object.keys(collections).length === 0 ? (
+                  <span className="text-[11px] text-muted">No collections yet.</span>
+                ) : (
+                  Object.entries(collections).map(([name, items]) => {
+                    const included = items.includes(skill.canonicalPath)
+                    return (
+                      <button
+                        key={name}
+                        onClick={() => onToggleCollection(name, skill)}
+                        className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+                          included
+                            ? "border-accent bg-surface-hover text-foreground"
+                            : "border-border text-muted hover:text-foreground"
+                        }`}
+                      >
+                        {name}
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Divider */}
@@ -732,6 +975,43 @@ function RightPanel({ skill, content, contentLoading, onContentSaved, onSkillRem
               Skill content not available. This skill may not have a SKILL.md file.
             </p>
           )}
+
+          {skill.supportingFiles.length > 0 && !editMode && (
+            <>
+              <hr className="border-border my-6" />
+              <div className="grid grid-cols-[220px_1fr] gap-4">
+                <div>
+                  <h2 className="text-[12px] uppercase tracking-widest text-muted mb-3">
+                    Supporting Files
+                  </h2>
+                  <div className="flex flex-col gap-1">
+                    {skill.supportingFiles.map((file) => (
+                      <button
+                        key={file.relativePath}
+                        onClick={() => handleSupportingFileSelect(file.relativePath)}
+                        className={`text-left rounded-md border px-2 py-1.5 text-[12px] transition-colors ${
+                          selectedSupportingFile === file.relativePath
+                            ? "border-accent bg-surface-hover text-foreground"
+                            : "border-border text-muted hover:text-foreground hover:bg-surface-hover"
+                        }`}
+                      >
+                        <div className="truncate">{file.relativePath}</div>
+                        <div className="text-[10px] text-muted">{file.size} bytes</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h2 className="text-[12px] uppercase tracking-widest text-muted mb-3">
+                    Preview
+                  </h2>
+                  <pre className="min-h-[220px] overflow-x-auto rounded-lg border border-border bg-surface p-4 text-[12px] text-foreground whitespace-pre-wrap">
+                    {supportingPreview || "Select a supporting file to preview it."}
+                  </pre>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -744,6 +1024,168 @@ function RightPanel({ skill, content, contentLoading, onContentSaved, onSkillRem
           onRemoveAll={handleRemoveAll}
         />
       )}
+    </div>
+  )
+}
+
+function CreateSkillDialog({
+  open,
+  onClose,
+  agents,
+  defaultTargets,
+  onCreate,
+}: {
+  open: boolean
+  onClose: () => void
+  agents: DetectedAgent[]
+  defaultTargets: string[]
+  onCreate: (data: { name: string; description: string; content: string; targets: string[] }) => void
+}) {
+  const [name, setName] = useState("")
+  const [description, setDescription] = useState("")
+  const [content, setContent] = useState("")
+  const [targets, setTargets] = useState<string[]>([])
+
+  useEffect(() => {
+    if (open) {
+      setName("")
+      setDescription("")
+      setContent("")
+      setTargets(defaultTargets.length > 0 ? defaultTargets : agents.map((agent) => agent.name))
+    }
+  }, [open, defaultTargets, agents])
+
+  if (!open) return null
+
+  const toggleTarget = (name: string) => {
+    setTargets((prev) => (prev.includes(name) ? prev.filter((item) => item !== name) : [...prev, name]))
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="w-full max-w-lg rounded-xl border border-border bg-surface p-5 shadow-lg">
+        <h2 className="text-[15px] font-semibold text-foreground mb-1">New Skill</h2>
+        <p className="text-[12px] text-muted mb-4">Create a local skill and install it into one or more targets.</p>
+        <div className="flex flex-col gap-3">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Skill name"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-[12px] text-foreground"
+          />
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Short description"
+            className="min-h-[90px] w-full rounded-lg border border-border bg-background px-3 py-2 text-[12px] text-foreground"
+          />
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder={`---
+name: my-skill
+description: What this skill does
+---
+
+# My Skill
+
+## Instructions
+
+Add your skill instructions here.`}
+            className="min-h-[220px] w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-[12px] text-foreground"
+          />
+          <div>
+            <p className="text-[12px] font-medium text-foreground mb-2">Targets</p>
+            <div className="grid grid-cols-2 gap-2">
+              {agents.map((agent) => (
+                <label key={agent.name} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-[12px] text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={targets.includes(agent.name)}
+                    onChange={() => toggleTarget(agent.name)}
+                  />
+                  <span>{agent.displayName}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button onClick={onClose} className="px-4 py-2 text-[12px] text-muted">Cancel</button>
+            <button
+              onClick={() => onCreate({ name: name.trim(), description: description.trim(), content, targets })}
+              disabled={!name.trim()}
+              className="rounded-lg bg-foreground px-4 py-2 text-[12px] text-background disabled:opacity-40"
+            >
+              Create
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CollectionDialog({
+  open,
+  mode,
+  initialName,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean
+  mode: "create" | "rename"
+  initialName: string
+  onClose: () => void
+  onSubmit: (name: string) => void
+}) {
+  const [name, setName] = useState(initialName)
+
+  useEffect(() => {
+    if (open) {
+      setName(initialName)
+    }
+  }, [open, initialName])
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="w-full max-w-sm rounded-xl border border-border bg-surface p-5 shadow-lg">
+        <h2 className="text-[15px] font-semibold text-foreground mb-1">
+          {mode === "create" ? "New Collection" : "Rename Collection"}
+        </h2>
+        <p className="text-[12px] text-muted mb-4">
+          {mode === "create"
+            ? "Create a collection for grouping local skills."
+            : "Choose a new name for this collection."}
+        </p>
+        <div className="flex flex-col gap-3">
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Collection name"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-[12px] text-foreground"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && name.trim()) {
+                onSubmit(name.trim())
+              }
+            }}
+          />
+          <div className="flex items-center justify-end gap-2">
+            <button onClick={onClose} className="px-4 py-2 text-[12px] text-muted">
+              Cancel
+            </button>
+            <button
+              onClick={() => onSubmit(name.trim())}
+              disabled={!name.trim()}
+              className="rounded-lg bg-foreground px-4 py-2 text-[12px] text-background disabled:opacity-40"
+            >
+              {mode === "create" ? "Create" : "Save"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -762,6 +1204,24 @@ export function Home() {
   const [selectedSkill, setSelectedSkill] = useState<InstalledSkill | null>(null)
   const [skillContent, setSkillContent] = useState<string | null>(null)
   const [contentLoading, setContentLoading] = useState(false)
+  const [collections, setCollections] = useState<Record<string, string[]>>({})
+  const [selectedCollection, setSelectedCollection] = useState<string | null>(null)
+  const [defaultAgents, setDefaultAgents] = useState<string[]>([])
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [dragSkill, setDragSkill] = useState<DragSkillPayload | null>(null)
+  const [dragOverTarget, setDragOverTarget] = useState<string | null>(null)
+  const [dragToast, setDragToast] = useState<DragToast | null>(null)
+  const [collectionDialog, setCollectionDialog] = useState<{
+    open: boolean
+    mode: "create" | "rename"
+    initialName: string
+    targetName: string | null
+  }>({
+    open: false,
+    mode: "create",
+    initialName: "",
+    targetName: null,
+  })
 
   // Load agents and skills on mount
   useEffect(() => {
@@ -773,6 +1233,9 @@ export function Home() {
         ])
         setAgents(detectedAgents)
         setSkills(installedSkills)
+        const allSettings = await electronAPI.settingsAll()
+        setCollections((allSettings["collections.skills"] as Record<string, string[]>) || {})
+        setDefaultAgents((allSettings["install.defaultAgents"] as string[]) || [])
       } catch (err) {
         console.error("Failed to load installed skills:", err)
       } finally {
@@ -839,6 +1302,11 @@ export function Home() {
   const filteredSkills = useMemo(() => {
     let result = skills
 
+    if (selectedCollection) {
+      const ids = new Set(collections[selectedCollection] || [])
+      result = result.filter((s) => ids.has(s.canonicalPath))
+    }
+
     if (selectedAgent) {
       result = result.filter((s) => s.agents.includes(selectedAgent))
     }
@@ -849,12 +1317,27 @@ export function Home() {
         (s) =>
           s.name.toLowerCase().includes(q) ||
           s.description.toLowerCase().includes(q) ||
-          (s.source && s.source.toLowerCase().includes(q)),
+          (s.source && s.source.toLowerCase().includes(q)) ||
+          s.path.toLowerCase().includes(q) ||
+          s.canonicalPath.toLowerCase().includes(q) ||
+          (s.projectName && s.projectName.toLowerCase().includes(q)) ||
+          s.supportingFiles.some((file) =>
+            file.relativePath.toLowerCase().includes(q),
+          ),
       )
     }
 
     return result
-  }, [skills, selectedAgent, searchQuery])
+  }, [skills, selectedAgent, searchQuery, selectedCollection, collections])
+
+  const collectionCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const [name, items] of Object.entries(collections)) {
+      const ids = new Set(items)
+      counts[name] = skills.filter((skill) => ids.has(skill.canonicalPath)).length
+    }
+    return counts
+  }, [collections, skills])
 
   // Only show agents that actually have skills
   const agentsWithSkills = useMemo(() => {
@@ -868,6 +1351,7 @@ export function Home() {
   const handleClearFilters = useCallback(() => {
     setSearchQuery("")
     setSelectedAgent(null)
+    setSelectedCollection(null)
     setActiveFilter("all")
   }, [])
 
@@ -886,6 +1370,145 @@ export function Home() {
     }
   }, [])
 
+  const persistCollections = useCallback(async (next: Record<string, string[]>) => {
+    setCollections(next)
+    await electronAPI.settingsSet("collections.skills", next)
+  }, [])
+
+  const handleCreateCollection = useCallback(() => {
+    setCollectionDialog({
+      open: true,
+      mode: "create",
+      initialName: "",
+      targetName: null,
+    })
+  }, [])
+
+  const handleRenameCollection = useCallback((name: string) => {
+    setCollectionDialog({
+      open: true,
+      mode: "rename",
+      initialName: name,
+      targetName: name,
+    })
+  }, [])
+
+  const handleDeleteCollection = useCallback((name: string) => {
+    if (!window.confirm(`Delete collection "${name}"?`)) return
+    const next = { ...collections }
+    delete next[name]
+    if (selectedCollection === name) setSelectedCollection(null)
+    void persistCollections(next)
+  }, [collections, persistCollections, selectedCollection])
+
+  const handleToggleCollection = useCallback((name: string, skill: InstalledSkill) => {
+    const existing = new Set(collections[name] || [])
+    if (existing.has(skill.canonicalPath)) {
+      existing.delete(skill.canonicalPath)
+    } else {
+      existing.add(skill.canonicalPath)
+    }
+    void persistCollections({
+      ...collections,
+      [name]: Array.from(existing).sort(),
+    })
+  }, [collections, persistCollections])
+
+  const handleDropOnCollection = useCallback((name: string) => {
+    if (!dragSkill) return
+    const next = { ...collections }
+    const target = new Set(next[name] || [])
+    target.add(dragSkill.canonicalPath)
+    next[name] = Array.from(target).sort()
+    if (selectedCollection && selectedCollection !== name) {
+      const source = new Set(next[selectedCollection] || [])
+      if (source.has(dragSkill.canonicalPath)) {
+        source.delete(dragSkill.canonicalPath)
+        next[selectedCollection] = Array.from(source).sort()
+      }
+    }
+    void persistCollections(next)
+    setDragToast({
+      type: "success",
+      message:
+        selectedCollection && selectedCollection !== name
+          ? `Moved "${dragSkill.name}" to ${name}`
+          : `Added "${dragSkill.name}" to ${name}`,
+    })
+    setDragSkill(null)
+    setDragOverTarget(null)
+  }, [collections, dragSkill, persistCollections, selectedCollection])
+
+  const handleDropOnAgent = useCallback(async (agentDisplayName: string) => {
+    if (!dragSkill) return
+    const registryKey =
+      DISPLAY_NAME_TO_KEY[agentDisplayName] ||
+      agentDisplayName.toLowerCase().replace(/\s+/g, "-")
+    try {
+      await electronAPI.addToAgent(dragSkill.name, dragSkill.canonicalPath, registryKey)
+      const installedSkills = await electronAPI.listInstalled()
+      setSkills(installedSkills)
+      setDragToast({
+        type: "success",
+        message: `Added "${dragSkill.name}" to ${agentDisplayName}`,
+      })
+    } catch (err) {
+      console.error("Failed to add skill to agent:", err)
+      setDragToast({
+        type: "error",
+        message: `Failed to add "${dragSkill.name}" to ${agentDisplayName}`,
+      })
+    } finally {
+      setDragSkill(null)
+      setDragOverTarget(null)
+    }
+  }, [dragSkill])
+
+  useEffect(() => {
+    if (!dragToast) return
+    const timer = window.setTimeout(() => setDragToast(null), 2200)
+    return () => window.clearTimeout(timer)
+  }, [dragToast])
+
+  const handleCreateSkill = useCallback(async (data: { name: string; description: string; content: string; targets: string[] }) => {
+    await electronAPI.createSkill({
+      name: data.name,
+      description: data.description,
+      content: data.content,
+      agentNames: data.targets,
+    })
+    setShowCreateDialog(false)
+    const installedSkills = await electronAPI.listInstalled()
+    setSkills(installedSkills)
+  }, [])
+
+  const handleCollectionDialogSubmit = useCallback((name: string) => {
+    if (!name) return
+
+    if (collectionDialog.mode === "create") {
+      if (collections[name]) {
+        setCollectionDialog((prev) => ({ ...prev, open: false }))
+        return
+      }
+      void persistCollections({ ...collections, [name]: [] })
+      setCollectionDialog((prev) => ({ ...prev, open: false }))
+      return
+    }
+
+    const sourceName = collectionDialog.targetName
+    if (!sourceName || sourceName === name) {
+      setCollectionDialog((prev) => ({ ...prev, open: false }))
+      return
+    }
+
+    const next = { ...collections }
+    next[name] = next[sourceName] || []
+    delete next[sourceName]
+    if (selectedCollection === sourceName) setSelectedCollection(name)
+    void persistCollections(next)
+    setCollectionDialog((prev) => ({ ...prev, open: false }))
+  }, [collectionDialog, collections, persistCollections, selectedCollection])
+
   return (
     <div className="flex h-full">
       {/* Column 1: Left sidebar (filter panel) */}
@@ -897,6 +1520,18 @@ export function Home() {
         onSelectAgent={setSelectedAgent}
         activeFilter={activeFilter}
         onFilterChange={setActiveFilter}
+        collections={collections}
+        collectionCounts={collectionCounts}
+        selectedCollection={selectedCollection}
+        onSelectCollection={setSelectedCollection}
+        onCreateCollection={handleCreateCollection}
+        onRenameCollection={handleRenameCollection}
+        onDeleteCollection={handleDeleteCollection}
+        dragSkill={dragSkill}
+        dragOverTarget={dragOverTarget}
+        onDragEnterTarget={setDragOverTarget}
+        onDropOnAgent={handleDropOnAgent}
+        onDropOnCollection={handleDropOnCollection}
       />
 
       {/* Column 2: Skill list */}
@@ -909,7 +1544,17 @@ export function Home() {
         selectedSkillName={selectedSkill?.name ?? null}
         onSelectSkill={handleSelectSkill}
         selectedAgent={selectedAgent}
+        selectedCollection={selectedCollection}
         onClearFilters={handleClearFilters}
+        onCreateSkill={() => setShowCreateDialog(true)}
+        dragSkill={dragSkill}
+        onDragSkillStart={(skill) =>
+          setDragSkill({ name: skill.name, canonicalPath: skill.canonicalPath })
+        }
+        onDragSkillEnd={() => {
+          setDragSkill(null)
+          setDragOverTarget(null)
+        }}
       />
 
       {/* Column 3: Skill detail */}
@@ -917,9 +1562,48 @@ export function Home() {
         skill={selectedSkill}
         content={skillContent}
         contentLoading={contentLoading}
+        collections={collections}
         onContentSaved={handleContentSaved}
         onSkillRemoved={handleSkillRemoved}
+        onToggleCollection={handleToggleCollection}
+        onCreateCollection={handleCreateCollection}
       />
+
+      <CreateSkillDialog
+        open={showCreateDialog}
+        onClose={() => setShowCreateDialog(false)}
+        agents={agents}
+        defaultTargets={defaultAgents}
+        onCreate={handleCreateSkill}
+      />
+
+      <CollectionDialog
+        open={collectionDialog.open}
+        mode={collectionDialog.mode}
+        initialName={collectionDialog.initialName}
+        onClose={() =>
+          setCollectionDialog((prev) => ({ ...prev, open: false }))
+        }
+        onSubmit={handleCollectionDialogSubmit}
+      />
+
+      {dragSkill && (
+        <div className="pointer-events-none fixed bottom-6 right-6 z-40 rounded-full border border-accent/40 bg-surface px-4 py-2 text-[12px] text-foreground shadow-lg">
+          Dragging “{dragSkill.name}”
+        </div>
+      )}
+
+      {dragToast && (
+        <div
+          className={`pointer-events-none fixed bottom-6 left-1/2 z-40 -translate-x-1/2 rounded-full border px-4 py-2 text-[12px] shadow-lg ${
+            dragToast.type === "success"
+              ? "border-emerald-500/30 bg-emerald-950/80 text-emerald-100"
+              : "border-red-500/30 bg-red-950/80 text-red-100"
+          }`}
+        >
+          {dragToast.message}
+        </div>
+      )}
     </div>
   )
 }

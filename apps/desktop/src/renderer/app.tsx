@@ -9,6 +9,7 @@ import { Servers } from "./routes/servers"
 import { ServerSkills } from "./routes/server-skills"
 import { Dashboard } from "./routes/dashboard"
 import { Settings } from "./routes/settings"
+import { ScanSources } from "./routes/scan-sources"
 
 function CodeInputDialog() {
   const { awaitingCode, codeError, exchangeCode, cancelSignIn } = useAuthStore()
@@ -83,6 +84,7 @@ function AppShell() {
             <Route path="/favorites" element={<div className="flex-1 overflow-y-auto"><Favorites /></div>} />
             <Route path="/servers" element={<div className="flex-1 overflow-y-auto"><Servers /></div>} />
             <Route path="/servers/:id/skills" element={<ServerSkills />} />
+            <Route path="/scan-sources" element={<ScanSources />} />
             <Route path="/dashboard" element={<div className="flex-1 overflow-y-auto"><Dashboard /></div>} />
             <Route path="/settings" element={<div className="flex-1 overflow-y-auto"><Settings /></div>} />
           </Routes>

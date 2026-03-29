@@ -94,6 +94,14 @@ export function Settings() {
   const [installMethod, setInstallMethod] = useState("symlink")
   const [searchPreference, setSearchPreference] = useState("semantic")
   const [telemetryEnabled, setTelemetryEnabled] = useState(true)
+  const [customScanPaths, setCustomScanPaths] = useState<string[]>([])
+  const [newScanPath, setNewScanPath] = useState("")
+  const [defaultAgents, setDefaultAgents] = useState<string[]>([])
+  const [mirrorAgents, setMirrorAgents] = useState<string[]>([])
+  const [detectedAgents, setDetectedAgents] = useState<DetectedAgent[]>([])
+  const [appVersion, setAppVersion] = useState("")
+  const [updateState, setUpdateState] = useState<UpdateState | null>(null)
+  const [checkingUpdates, setCheckingUpdates] = useState(false)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
 
   const loadSettings = useCallback(async () => {
@@ -108,6 +116,12 @@ export function Settings() {
         )
       if (all["telemetry.enabled"] !== undefined)
         setTelemetryEnabled(all["telemetry.enabled"] as boolean)
+      if (Array.isArray(all["scan.customPaths"]))
+        setCustomScanPaths(all["scan.customPaths"] as string[])
+      if (Array.isArray(all["install.defaultAgents"]))
+        setDefaultAgents(all["install.defaultAgents"] as string[])
+      if (Array.isArray(all["sync.mirrorAgents"]))
+        setMirrorAgents(all["sync.mirrorAgents"] as string[])
     } catch (err) {
       console.error("Failed to load settings:", err)
     } finally {
@@ -119,12 +133,36 @@ export function Settings() {
     loadSettings()
   }, [loadSettings])
 
+  useEffect(() => {
+    electronAPI.detectAgents().then(setDetectedAgents).catch(() => {})
+    electronAPI.appGetVersion().then(setAppVersion).catch(() => {})
+    electronAPI.updatesGetState().then(setUpdateState).catch(() => {})
+    const cleanup = electronAPI.onUpdateState((state) => {
+      setUpdateState(state)
+      setCheckingUpdates(state.status === "checking" || state.status === "downloading")
+    })
+    return cleanup
+  }, [])
+
   async function saveSetting(key: string, value: unknown) {
     try {
       await electronAPI.settingsSet(key, value)
     } catch (err) {
       console.error("Failed to save setting:", err)
     }
+  }
+
+  function toggleAgentSelection(
+    current: string[],
+    setCurrent: (value: string[]) => void,
+    key: "install.defaultAgents" | "sync.mirrorAgents",
+    value: string,
+  ) {
+    const next = current.includes(value)
+      ? current.filter((item) => item !== value)
+      : [...current, value]
+    setCurrent(next)
+    saveSetting(key, next)
   }
 
   async function handleExchange() {
@@ -138,6 +176,18 @@ export function Settings() {
       setError(err instanceof Error ? err.message : "Failed to verify code")
     } finally {
       setExchanging(false)
+    }
+  }
+
+  async function handleCheckUpdates() {
+    setCheckingUpdates(true)
+    try {
+      const state = await electronAPI.updatesCheck()
+      setUpdateState(state)
+    } catch (err) {
+      console.error("Failed to check updates:", err)
+    } finally {
+      setCheckingUpdates(false)
     }
   }
 
@@ -233,6 +283,165 @@ export function Settings() {
                 }}
               />
             )}
+          </div>
+        </section>
+
+        {/* Updates */}
+        <section>
+          <h3 className="text-sm font-semibold text-foreground mb-3">
+            Updates
+          </h3>
+          <div className="rounded-lg border border-border bg-surface p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm text-foreground">Desktop app updates</p>
+                <p className="text-[11px] text-muted mt-1">
+                  Version {appVersion || "unknown"}
+                </p>
+                <p className="text-[11px] text-muted mt-2">
+                  {updateState?.message || "Check for updates from GitHub Releases."}
+                </p>
+                {updateState?.availableVersion && (
+                  <p className="text-[11px] text-foreground mt-1">
+                    Latest available: {updateState.availableVersion}
+                  </p>
+                )}
+                {typeof updateState?.progressPercent === "number" && (
+                  <p className="text-[11px] text-muted mt-1">
+                    Download progress: {Math.round(updateState.progressPercent)}%
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={handleCheckUpdates}
+                  disabled={checkingUpdates}
+                  className="rounded-lg border border-border px-4 py-2 text-[12px] font-medium text-foreground hover:bg-surface-hover disabled:opacity-40"
+                >
+                  {checkingUpdates ? "Checking..." : "Check now"}
+                </button>
+                {updateState?.status === "downloaded" && (
+                  <button
+                    onClick={() => electronAPI.updatesInstall()}
+                    className="rounded-lg bg-foreground px-4 py-2 text-[12px] font-medium text-background"
+                  >
+                    Restart to install
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Scan paths */}
+        <section>
+          <h3 className="text-sm font-semibold text-foreground mb-3">
+            Scan Paths
+          </h3>
+          <div className="flex flex-col gap-3">
+            <div className="rounded-lg border border-border bg-surface p-3">
+              <p className="text-sm text-foreground mb-1">Custom scan directories</p>
+              <p className="text-[11px] text-muted mb-3">
+                SkillsGate will scan direct skill folders and project-local tool paths inside these roots.
+              </p>
+              <div className="flex gap-2 mb-3">
+                <input
+                  type="text"
+                  value={newScanPath}
+                  onChange={(e) => setNewScanPath(e.target.value)}
+                  placeholder="~/projects or ~/my-skills"
+                  className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-[12px] text-foreground placeholder:text-muted focus:outline-none focus:border-accent/40 transition-colors font-mono"
+                />
+                <button
+                  onClick={() => {
+                    const value = newScanPath.trim()
+                    if (!value || customScanPaths.includes(value)) return
+                    const next = [...customScanPaths, value]
+                    setCustomScanPaths(next)
+                    setNewScanPath("")
+                    saveSetting("scan.customPaths", next)
+                  }}
+                  className="px-3 py-2 rounded-lg bg-foreground text-background text-[12px] font-medium"
+                >
+                  Add
+                </button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {customScanPaths.length === 0 ? (
+                  <p className="text-[11px] text-muted">No custom scan paths configured.</p>
+                ) : (
+                  customScanPaths.map((scanPath) => (
+                    <div key={scanPath} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                      <code className="text-[11px] text-foreground">{scanPath}</code>
+                      <button
+                        onClick={() => {
+                          const next = customScanPaths.filter((item) => item !== scanPath)
+                          setCustomScanPaths(next)
+                          saveSetting("scan.customPaths", next)
+                        }}
+                        className="text-[11px] text-red-400 hover:text-red-300"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Target defaults */}
+        <section>
+          <h3 className="text-sm font-semibold text-foreground mb-3">
+            Default Targets
+          </h3>
+          <div className="rounded-lg border border-border bg-surface p-3">
+            <p className="text-sm text-foreground mb-1">Install targets</p>
+            <p className="text-[11px] text-muted mb-3">
+              These targets are used for installs and new local skill creation when no explicit target set is chosen.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {detectedAgents.map((agent) => (
+                <label key={agent.name} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-[12px] text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={defaultAgents.includes(agent.name)}
+                    onChange={() =>
+                      toggleAgentSelection(defaultAgents, setDefaultAgents, "install.defaultAgents", agent.name)
+                    }
+                  />
+                  <span>{agent.displayName}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Sync rules */}
+        <section>
+          <h3 className="text-sm font-semibold text-foreground mb-3">
+            Sync Rules
+          </h3>
+          <div className="rounded-lg border border-border bg-surface p-3">
+            <p className="text-sm text-foreground mb-1">Mirror installs to additional targets</p>
+            <p className="text-[11px] text-muted mb-3">
+              Any skill installed or created in the desktop app will also be linked into these targets.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {detectedAgents.map((agent) => (
+                <label key={agent.name} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-[12px] text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={mirrorAgents.includes(agent.name)}
+                    onChange={() =>
+                      toggleAgentSelection(mirrorAgents, setMirrorAgents, "sync.mirrorAgents", agent.name)
+                    }
+                  />
+                  <span>{agent.displayName}</span>
+                </label>
+              ))}
+            </div>
           </div>
         </section>
 

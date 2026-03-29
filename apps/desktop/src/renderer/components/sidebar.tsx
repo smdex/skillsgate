@@ -90,6 +90,26 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    to: "/scan-sources",
+    label: "Scan Sources",
+    icon: (
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M3 7h18" />
+        <path d="M6 12h12" />
+        <path d="M10 17h4" />
+      </svg>
+    ),
+  },
+  {
     to: "/dashboard",
     label: "Dashboard",
     icon: (

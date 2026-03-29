@@ -3,6 +3,7 @@ import path from "node:path"
 import { registerIpcHandlers } from "./ipc-handlers"
 import { SkillsFileWatcher } from "./file-watcher"
 import { closeDb } from "./db/index"
+import { initAutoUpdater } from "./auto-updater"
 
 let mainWindow: BrowserWindow | null = null
 let fileWatcher: SkillsFileWatcher | null = null
@@ -97,6 +98,8 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"))
   }
+
+  initAutoUpdater(mainWindow)
 }
 
 app.whenReady().then(() => {

@@ -109,4 +109,28 @@ export class RemoteSkillStore {
       .get(serverId) as { cnt: number }
     return row.cnt
   }
+
+  getByPath(serverId: string, remotePath: string): RemoteSkill | null {
+    const row = this.db
+      .prepare(
+        "SELECT * FROM remote_skills WHERE server_id = ? AND remote_path = ? LIMIT 1",
+      )
+      .get(serverId, remotePath) as SkillRow | undefined
+    return row ? rowToSkill(row) : null
+  }
+
+  updateContent(
+    serverId: string,
+    remotePath: string,
+    content: string,
+    contentHash: string,
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE remote_skills
+         SET content = ?, content_hash = ?, synced_at = datetime('now')
+         WHERE server_id = ? AND remote_path = ?`,
+      )
+      .run(content, contentHash, serverId, remotePath)
+  }
 }

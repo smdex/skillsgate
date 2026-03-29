@@ -114,6 +114,54 @@ export async function testConnection(
     : { ok: false, error: result.stderr.trim() || "Connection failed" }
 }
 
+export async function readRemoteFile(
+  server: RemoteServer,
+  remotePath: string,
+): Promise<string> {
+  const escaped = `'${remotePath.replace(/'/g, "'\\''")}'`
+  const result = await sshExec(server, `cat ${escaped}`)
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr.trim() || "Failed to read remote file")
+  }
+  return result.stdout
+}
+
+export async function writeRemoteFile(
+  server: RemoteServer,
+  remotePath: string,
+  content: string,
+): Promise<void> {
+  const escaped = `'${remotePath.replace(/'/g, "'\\''")}'`
+  const command = `mkdir -p "$(dirname ${escaped})" && cat > ${escaped}`
+  await new Promise<void>((resolve, reject) => {
+    const args = [...buildSshArgs(server), command]
+    const proc = spawn("ssh", args, {
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 30_000,
+    })
+
+    let stderr = ""
+    proc.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf-8")
+    })
+
+    proc.on("error", (err) => {
+      reject(new Error(err.message))
+    })
+
+    proc.on("close", (code) => {
+      if ((code ?? 1) === 0) {
+        resolve()
+      } else {
+        reject(new Error(stderr.trim() || `SSH exited with code ${code ?? 1}`))
+      }
+    })
+
+    proc.stdin.write(content, "utf-8")
+    proc.stdin.end()
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Remote skill scanner (2 SSH round trips)
 // ---------------------------------------------------------------------------

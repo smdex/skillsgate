@@ -43,6 +43,9 @@ export function ServerSkills() {
   const [servers, setServers] = useState<RemoteServer[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedSkill, setSelectedSkill] = useState<RemoteSkill | null>(null)
+  const [editMode, setEditMode] = useState(false)
+  const [editContent, setEditContent] = useState("")
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
 
   useEffect(() => {
     async function load() {
@@ -54,6 +57,11 @@ export function ServerSkills() {
         ])
         setSkills(skillsList)
         setServers(serversList)
+        setSelectedSkill((current) =>
+          current
+            ? skillsList.find((skill) => skill.id === current.id) ?? current
+            : null,
+        )
       } catch (err) {
         console.error("Failed to load server skills:", err)
       } finally {
@@ -65,6 +73,35 @@ export function ServerSkills() {
 
   const server = servers.find((s) => s.id === id)
   const serverLabel = server?.label ?? "Server"
+
+  useEffect(() => {
+    setEditMode(false)
+    setEditContent(selectedSkill?.content ?? "")
+    setSaveState("idle")
+  }, [selectedSkill?.id])
+
+  async function handleSaveRemote() {
+    if (!id || !selectedSkill) return
+    setSaveState("saving")
+    try {
+      await electronAPI.serversWriteSkill(id, selectedSkill.remotePath, editContent)
+      const next = { ...selectedSkill, content: editContent }
+      setSelectedSkill(next)
+      setSkills((prev) =>
+        prev.map((skill) =>
+          skill.id === selectedSkill.id ? { ...skill, content: editContent } : skill,
+        ),
+      )
+      setSaveState("saved")
+      setTimeout(() => {
+        setEditMode(false)
+        setSaveState("idle")
+      }, 700)
+    } catch (err) {
+      console.error("Failed to save remote skill:", err)
+      setSaveState("error")
+    }
+  }
 
   return (
     <div className="flex h-full">
@@ -182,13 +219,32 @@ export function ServerSkills() {
           <div className="max-w-3xl px-8 py-6">
             {/* Header */}
             <div className="mb-6">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold text-foreground">
                   {selectedSkill.name}
                 </h1>
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-surface-hover text-muted border border-border">
                   remote
                 </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setEditMode((value) => !value)}
+                    className="rounded-md border border-border px-3 py-1.5 text-[12px] text-foreground hover:bg-surface-hover transition-colors"
+                  >
+                    {editMode ? "View" : "Edit"}
+                  </button>
+                  {editMode && (
+                    <button
+                      onClick={handleSaveRemote}
+                      disabled={saveState === "saving"}
+                      className="rounded-md bg-foreground px-3 py-1.5 text-[12px] text-background disabled:opacity-50"
+                    >
+                      {saveState === "saving" ? "Saving..." : "Save"}
+                    </button>
+                  )}
+                </div>
               </div>
               {selectedSkill.description && (
                 <p className="text-sm text-muted mb-3">
@@ -203,7 +259,22 @@ export function ServerSkills() {
             <hr className="border-border mb-6" />
 
             {/* Content */}
-            {selectedSkill.content ? (
+            {editMode ? (
+              <div className="flex flex-col gap-3">
+                <textarea
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  className="min-h-[420px] w-full rounded-lg border border-border bg-surface p-4 font-mono text-[13px] text-foreground focus:outline-none focus:border-accent"
+                  spellCheck={false}
+                />
+                {saveState === "saved" && (
+                  <p className="text-[12px] text-green-500">Saved</p>
+                )}
+                {saveState === "error" && (
+                  <p className="text-[12px] text-red-500">Save failed</p>
+                )}
+              </div>
+            ) : selectedSkill.content ? (
               <div
                 className="skill-prose"
                 dangerouslySetInnerHTML={{
