@@ -530,7 +530,7 @@ export function Settings() {
           <h3 className="text-sm font-semibold text-foreground mb-3">About</h3>
           <div className="p-3 rounded-lg border border-border bg-surface">
             <p className="text-sm text-foreground">
-              SkillsGate Desktop v0.1.0
+              SkillsGate Desktop v{appVersion || "0.1.6"}
             </p>
             <p className="text-[11px] text-muted mt-1">
               Manage AI agent skills from your desktop.

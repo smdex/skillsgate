@@ -187,9 +187,11 @@ export function Sidebar() {
   const isHome = location.pathname === "/"
   const { user, loading: authLoading, signIn } = useAuthStore()
   const [serverCount, setServerCount] = useState(0)
+  const [appVersion, setAppVersion] = useState("")
 
   useEffect(() => {
     electronAPI.serversCount().then(setServerCount).catch(() => {})
+    electronAPI.appGetVersion().then(setAppVersion).catch(() => {})
   }, [location.pathname])
 
   // Enrich nav items with badge data
@@ -305,7 +307,7 @@ export function Sidebar() {
           </span>
         </div>
         <span className="text-xs text-muted mt-1 block">
-          Desktop v0.1.0
+          Desktop v{appVersion || "0.1.6"}
         </span>
       </div>
 
