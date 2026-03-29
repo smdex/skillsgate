@@ -298,10 +298,13 @@ interface DetailPanelProps {
   skill: CatalogSkill
   onClose: () => void
   installedNames: Set<string>
-  onInstall: (source: string) => Promise<void>
+  onInstall: (source: string, agentNames: string[]) => Promise<void>
 }
 
 function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelProps) {
+  const [availableAgents, setAvailableAgents] = useState<DetectedAgent[]>([])
+  const [defaultAgents, setDefaultAgents] = useState<string[]>([])
+  const [selectedAgents, setSelectedAgents] = useState<string[]>([])
   const [content, setContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [installing, setInstalling] = useState(false)
@@ -338,6 +341,28 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
     setInstalled(installedNames.has(skill.name.toLowerCase()))
   }, [installedNames, skill.name])
 
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([electronAPI.detectAgents(), electronAPI.settingsAll()])
+      .then(([agents, settings]) => {
+        if (cancelled) return
+        setAvailableAgents(agents)
+        const defaults = (settings["install.defaultAgents"] as string[]) || agents.map((agent) => agent.name)
+        setDefaultAgents(defaults)
+        setSelectedAgents(defaults)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAvailableAgents([])
+          setDefaultAgents([])
+          setSelectedAgents([])
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [skill.skillId])
+
   async function handleInstall() {
     // Extract source from install command like "skillsgate add vercel/next.js --skill foo -y"
     // or fall back to githubUrl
@@ -363,13 +388,21 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
 
     setInstalling(true)
     try {
-      await onInstall(source)
+      await onInstall(source, selectedAgents)
       setInstalled(true)
     } catch (err) {
       console.error("Install failed:", err)
     } finally {
       setInstalling(false)
     }
+  }
+
+  function toggleAgent(name: string) {
+    setSelectedAgents((prev) =>
+      prev.includes(name)
+        ? prev.filter((value) => value !== name)
+        : [...prev, name],
+    )
   }
 
   return (
@@ -437,7 +470,7 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
             )}
 
             {/* Install button */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 mb-4">
               {installed ? (
                 <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-medium bg-surface-hover text-muted border border-border">
                   <CheckIcon /> Installed
@@ -445,7 +478,7 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
               ) : (
                 <button
                   onClick={handleInstall}
-                  disabled={installing || !skill.installCommand}
+                  disabled={installing || !skill.installCommand || selectedAgents.length === 0}
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-medium bg-foreground text-background hover:opacity-90 transition-opacity disabled:opacity-50"
                 >
                   {installing ? (
@@ -466,6 +499,32 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
                 </code>
               )}
             </div>
+
+            {!installed && availableAgents.length > 0 && (
+              <div>
+                <p className="text-[12px] font-medium text-foreground mb-2">
+                  Install targets
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {availableAgents.map((agent) => (
+                    <label
+                      key={agent.name}
+                      className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-[12px] text-foreground"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedAgents.includes(agent.name)}
+                        onChange={() => toggleAgent(agent.name)}
+                      />
+                      <span>{agent.displayName}</span>
+                      {defaultAgents.includes(agent.name) && (
+                        <span className="ml-auto text-[10px] text-muted">default</span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <hr className="border-border mb-5" />
@@ -663,8 +722,8 @@ export function Discover() {
     }
   }
 
-  async function handleInstall(source: string) {
-    const results = await electronAPI.installSkill(source, [], "global")
+  async function handleInstall(source: string, agentNames: string[]) {
+    const results = await electronAPI.installSkill(source, agentNames, "global")
     const hasError = results.some((r) => !r.success)
     if (hasError) {
       const errorMsg = results
