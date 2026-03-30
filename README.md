@@ -12,11 +12,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.5/SkillsGate-0.1.5-arm64.dmg">macOS (Apple Silicon)</a> &middot;
-  <a href="https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.5/SkillsGate-0.1.5.dmg">macOS (Intel)</a> &middot;
-  <a href="https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.5/SkillsGate.Setup.0.1.5.exe">Windows</a> &middot;
-  <a href="https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.5/SkillsGate-0.1.5-x86_64.AppImage">Linux</a> &middot;
-  <a href="https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.5/SkillsGate-0.1.5-amd64.deb">Ubuntu .deb</a> &middot;
+  <a href="https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.6/SkillsGate-0.1.6-arm64.dmg">macOS (Apple Silicon)</a> &middot;
+  <a href="https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.6/SkillsGate-0.1.6.dmg">macOS (Intel)</a> &middot;
+  <a href="https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.6/SkillsGate.Setup.0.1.6.exe">Windows</a> &middot;
+  <a href="https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.6/SkillsGate-0.1.6-x86_64.AppImage">Linux</a> &middot;
+  <a href="https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.6/SkillsGate-0.1.6-amd64.deb">Ubuntu .deb</a> &middot;
   <code>npm i -g @skillsgate/tui</code>
 </p>
 
@@ -38,7 +38,7 @@ Discover, install, and publish skills for Claude Code, Cursor, Windsurf, GitHub 
 
 ### Desktop App (macOS, Windows, Linux)
 
-[macOS (Apple Silicon)](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.5/SkillsGate-0.1.5-arm64.dmg) &middot; [macOS (Intel)](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.5/SkillsGate-0.1.5.dmg) &middot; [Windows](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.5/SkillsGate.Setup.0.1.5.exe) &middot; [Linux AppImage](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.5/SkillsGate-0.1.5-x86_64.AppImage) &middot; [Debian/Ubuntu .deb](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.5/SkillsGate-0.1.5-amd64.deb)
+[macOS (Apple Silicon)](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.6/SkillsGate-0.1.6-arm64.dmg) &middot; [macOS (Intel)](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.6/SkillsGate-0.1.6.dmg) &middot; [Windows](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.6/SkillsGate.Setup.0.1.6.exe) &middot; [Linux AppImage](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.6/SkillsGate-0.1.6-x86_64.AppImage) &middot; [Debian/Ubuntu .deb](https://github.com/skillsgate/skillsgate/releases/download/desktop-v0.1.6/SkillsGate-0.1.6-amd64.deb)
 
 Three-column skill browser with search, favorites, remote servers, and a built-in editor. Auto-updates via GitHub Releases. The macOS build is signed and notarized with Apple.
 
