@@ -114,13 +114,7 @@ jobs:
           cd packages/tui
           npm version $VERSION --no-git-tag-version --allow-same-version
           # Update optionalDependencies to match the release version
-          node -e "
-            const pkg = require('./package.json');
-            for (const k of Object.keys(pkg.optionalDependencies || {})) {
-              pkg.optionalDependencies[k] = '$VERSION';
-            }
-            require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-          "
+          jq --arg v "$VERSION" '.optionalDependencies |= map_values($v)' package.json > tmp.json && mv tmp.json package.json
           npm publish --access public --provenance
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
