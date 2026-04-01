@@ -1,67 +1,43 @@
-import { useRef, useEffect } from "react"
-import { EditorView, keymap, placeholder as placeholderExt } from "@codemirror/view"
-import { EditorState } from "@codemirror/state"
-import { markdown } from "@codemirror/lang-markdown"
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands"
-import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language"
-import { oneDark } from "@codemirror/theme-one-dark"
+import { useRef, useEffect, useCallback } from "react"
+import * as monaco from "monaco-editor"
 
-// ---------------------------------------------------------------------------
-// Custom dark theme extension that matches the app's dark aesthetic.
-// Layers on top of oneDark to override the background and gutter colors
-// so the editor blends with the surrounding surface/background.
-// ---------------------------------------------------------------------------
-
-const appDarkTheme = EditorView.theme(
-  {
-    "&": {
-      backgroundColor: "var(--background)",
-      color: "var(--foreground)",
-      fontSize: "13px",
-      fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
-    },
-    ".cm-content": {
-      caretColor: "var(--foreground)",
-      padding: "16px 0",
-    },
-    ".cm-cursor, .cm-dropCursor": {
-      borderLeftColor: "var(--foreground)",
-    },
-    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
-      {
-        backgroundColor: "rgba(168, 162, 158, 0.2)",
-      },
-    ".cm-gutters": {
-      backgroundColor: "var(--background)",
-      color: "var(--muted)",
-      border: "none",
-      paddingRight: "8px",
-    },
-    ".cm-activeLineGutter": {
-      backgroundColor: "transparent",
-      color: "var(--foreground)",
-    },
-    ".cm-activeLine": {
-      backgroundColor: "rgba(168, 162, 158, 0.05)",
-    },
-    ".cm-foldPlaceholder": {
-      backgroundColor: "var(--surface-hover)",
-      border: "1px solid var(--border)",
-      color: "var(--muted)",
-    },
-    "&.cm-focused": {
-      outline: "none",
-    },
-    ".cm-scroller": {
-      overflow: "auto",
-    },
+// Configure Monaco workers for Vite/Electron
+self.MonacoEnvironment = {
+  getWorker(_workerId: string, _label: string) {
+    return new Worker(
+      new URL("monaco-editor/esm/vs/editor/editor.worker.js", import.meta.url),
+      { type: "module" }
+    )
   },
-  { dark: true },
-)
+}
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
+// Define a dark theme matching the app's aesthetic
+monaco.editor.defineTheme("skillsgate-dark", {
+  base: "vs-dark",
+  inherit: true,
+  rules: [
+    { token: "comment", foreground: "6b7280" },
+    { token: "keyword", foreground: "c084fc" },
+    { token: "string", foreground: "86efac" },
+    { token: "emphasis", fontStyle: "italic" },
+    { token: "strong", fontStyle: "bold" },
+  ],
+  colors: {
+    "editor.background": "#0a0a0a",
+    "editor.foreground": "#e5e5e5",
+    "editor.lineHighlightBackground": "#ffffff08",
+    "editor.selectionBackground": "#a8a29e33",
+    "editorCursor.foreground": "#e5e5e5",
+    "editorLineNumber.foreground": "#525252",
+    "editorLineNumber.activeForeground": "#a3a3a3",
+    "editor.inactiveSelectionBackground": "#a8a29e1a",
+    "editorWidget.background": "#171717",
+    "editorWidget.border": "#262626",
+    "scrollbarSlider.background": "#52525233",
+    "scrollbarSlider.hoverBackground": "#52525266",
+    "scrollbarSlider.activeBackground": "#525252aa",
+  },
+})
 
 interface SkillEditorProps {
   content: string
@@ -69,105 +45,106 @@ interface SkillEditorProps {
   onSave: () => void
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export function SkillEditor({ content, onChange, onSave }: SkillEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const viewRef = useRef<EditorView | null>(null)
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const onChangeRef = useRef(onChange)
   const onSaveRef = useRef(onSave)
   const internalChange = useRef(false)
 
-  // Keep refs up to date without recreating the editor
-  useEffect(() => {
-    onChangeRef.current = onChange
-  }, [onChange])
+  onChangeRef.current = onChange
+  onSaveRef.current = onSave
 
-  useEffect(() => {
-    onSaveRef.current = onSave
-  }, [onSave])
+  const handleResize = useCallback(() => {
+    editorRef.current?.layout()
+  }, [])
 
-  // Create the editor on mount, destroy on unmount
+  // Create editor on mount
   useEffect(() => {
     if (!containerRef.current) return
 
-    const saveKeymap = keymap.of([
-      {
-        key: "Mod-s",
-        run: () => {
-          onSaveRef.current()
-          return true
-        },
+    const editor = monaco.editor.create(containerRef.current, {
+      value: content,
+      language: "markdown",
+      theme: "skillsgate-dark",
+      fontSize: 13,
+      fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
+      lineHeight: 20,
+      minimap: { enabled: false },
+      wordWrap: "on",
+      lineNumbers: "on",
+      renderLineHighlight: "line",
+      scrollBeyondLastLine: false,
+      padding: { top: 12, bottom: 12 },
+      overviewRulerLanes: 0,
+      hideCursorInOverviewRuler: true,
+      overviewRulerBorder: false,
+      scrollbar: {
+        verticalScrollbarSize: 8,
+        horizontalScrollbarSize: 8,
+        useShadows: false,
       },
-    ])
-
-    const state = EditorState.create({
-      doc: content,
-      extensions: [
-        saveKeymap,
-        history(),
-        keymap.of([...defaultKeymap, ...historyKeymap]),
-        markdown(),
-        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-        oneDark,
-        appDarkTheme,
-        EditorView.lineWrapping,
-        placeholderExt("Start writing your SKILL.md content..."),
-        EditorView.updateListener.of((update) => {
-          if (update.docChanged) {
-            internalChange.current = true
-            onChangeRef.current(update.state.doc.toString())
-          }
-        }),
-      ],
+      automaticLayout: false,
+      contextmenu: true,
+      tabSize: 2,
+      insertSpaces: true,
+      bracketPairColorization: { enabled: false },
+      guides: { indentation: false },
+      renderWhitespace: "none",
+      occurrencesHighlight: "off",
+      selectionHighlight: false,
+      folding: true,
+      glyphMargin: false,
     })
 
-    const view = new EditorView({
-      state,
-      parent: containerRef.current,
+    // Cmd+S to save
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      onSaveRef.current()
     })
 
-    viewRef.current = view
+    // Listen for content changes
+    editor.onDidChangeModelContent(() => {
+      internalChange.current = true
+      onChangeRef.current(editor.getValue())
+    })
+
+    editorRef.current = editor
+
+    // Resize observer for responsive layout
+    const observer = new ResizeObserver(handleResize)
+    observer.observe(containerRef.current)
+
+    window.addEventListener("resize", handleResize)
 
     return () => {
-      view.destroy()
-      viewRef.current = null
+      window.removeEventListener("resize", handleResize)
+      observer.disconnect()
+      editor.dispose()
+      editorRef.current = null
     }
-    // Only run on mount; content is set via initial state
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // If parent replaces the content string entirely (e.g. switching skills),
-  // update the editor document to match. Skip if the change originated from
-  // the editor itself to avoid a feedback loop that causes lag.
+  // Sync external content changes (e.g. switching skills)
   useEffect(() => {
     if (internalChange.current) {
       internalChange.current = false
       return
     }
 
-    const view = viewRef.current
-    if (!view) return
+    const editor = editorRef.current
+    if (!editor) return
 
-    const currentDoc = view.state.doc.toString()
-    if (currentDoc !== content) {
-      view.dispatch({
-        changes: {
-          from: 0,
-          to: currentDoc.length,
-          insert: content,
-        },
-      })
+    if (editor.getValue() !== content) {
+      editor.setValue(content)
     }
   }, [content])
 
   return (
     <div
       ref={containerRef}
-      className="border border-border rounded-lg overflow-hidden bg-background"
-      style={{ minHeight: "400px" }}
+      className="border border-border rounded-lg overflow-hidden"
+      style={{ minHeight: "400px", height: "calc(100vh - 300px)" }}
     />
   )
 }
