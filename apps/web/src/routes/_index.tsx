@@ -1,16 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
 import { Navbar } from "~/components/navbar";
 import { useReveal } from "~/components/use-reveal";
-import {
-	SkillSearch,
-	FavoritesProvider,
-	useFavorites,
-	FavoriteButton,
-	usePublicApiClient,
-	formatStars,
-	type CatalogSkill,
-	type CatalogResponse,
-} from "@skillsgate/ui";
 
 const FEATURES = [
 	{
@@ -117,159 +106,8 @@ const FAQ_ITEMS = [
 	},
 ];
 
-function useCatalog() {
-	const publicApi = usePublicApiClient();
-	const [skills, setSkills] = useState<CatalogSkill[]>([]);
-	const [total, setTotal] = useState(0);
-	const [hasMore, setHasMore] = useState(false);
-	const [isLoading, setIsLoading] = useState(true);
-	const [isLoadingMore, setIsLoadingMore] = useState(false);
-
-	const fetchSkills = useCallback(async (offset: number) => {
-		const res = await publicApi.get<CatalogResponse>(
-			`/api/v1/skills?limit=24&offset=${offset}`
-		);
-		if (res.ok) {
-			if (offset === 0) {
-				setSkills(res.data.skills);
-			} else {
-				setSkills((prev) => [...prev, ...res.data.skills]);
-			}
-			setTotal(res.data.meta.total);
-			setHasMore(res.data.meta.hasMore);
-		}
-	}, [publicApi]);
-
-	useEffect(() => {
-		fetchSkills(0).finally(() => setIsLoading(false));
-	}, [fetchSkills]);
-
-	const loadMore = useCallback(async () => {
-		setIsLoadingMore(true);
-		await fetchSkills(skills.length);
-		setIsLoadingMore(false);
-	}, [fetchSkills, skills.length]);
-
-	const sorted = useMemo(
-		() => [...skills].sort((a, b) => (b.githubStars ?? 0) - (a.githubStars ?? 0)),
-		[skills]
-	);
-
-	return { skills: sorted, total, hasMore, isLoading, isLoadingMore, loadMore };
-}
-
-function CatalogGrid({ catalog }: { catalog: ReturnType<typeof useCatalog> }) {
-	const { checkFavorites } = useFavorites();
-
-	// Batch-check new skill IDs whenever skills change (e.g. after "Load more")
-	useEffect(() => {
-		if (catalog.skills.length > 0) {
-			checkFavorites(catalog.skills.map((s) => s.skillId));
-		}
-	}, [catalog.skills.length, checkFavorites]);
-
-	return (
-		<>
-			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-				{catalog.skills.map((skill, i) => {
-					const publisher = skill.githubUrl
-						? skill.githubUrl.replace("https://github.com/", "").split("/")[0]
-						: null;
-
-					return (
-						<a
-							key={skill.skillId}
-							href={`/skills/${skill.urlPath}`}
-							className="group relative bg-card-bg border border-card-border rounded-xl p-5 hover:border-accent/30 transition-all duration-300 no-underline"
-							style={{ transitionDelay: `${(i % 6) * 60}ms` }}
-						>
-							{/* Header */}
-							<div className="flex items-start justify-between mb-3">
-								<div className="flex items-center gap-2">
-									<div className="w-2 h-2 rounded-full bg-accent/40" />
-									<span className="text-[11px] font-mono text-muted tracking-wide">
-										SKILL.md
-									</span>
-									{skill.githubStars != null && skill.githubStars > 0 && (
-										<span className="flex items-center gap-1 text-[10px] font-mono text-muted/60">
-											<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-amber-400/70">
-												<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-											</svg>
-											{formatStars(skill.githubStars)}
-										</span>
-									)}
-								</div>
-								<FavoriteButton skillId={skill.skillId} />
-							</div>
-
-							{/* Name */}
-							<h3 className="text-[15px] font-semibold text-foreground mb-2 group-hover:text-foreground/90">
-								{skill.name}
-							</h3>
-
-							{/* Publisher */}
-							{publisher && (
-								<p className="text-[12px] font-mono text-accent mb-3">
-									from "{publisher}"
-								</p>
-							)}
-
-							{/* Description */}
-							<p className="text-[13px] text-muted leading-relaxed line-clamp-3">
-								{skill.summary || skill.description}
-							</p>
-
-							{/* Categories */}
-							{skill.categories.length > 0 && (
-								<div className="flex flex-wrap gap-2 mt-4">
-									{skill.categories.slice(0, 3).map((cat) => (
-										<span
-											key={cat}
-											className="text-[10px] font-mono tracking-wider uppercase text-muted/60 bg-surface-hover px-2 py-0.5 rounded"
-										>
-											{cat}
-										</span>
-									))}
-								</div>
-							)}
-						</a>
-					);
-				})}
-			</div>
-
-			{/* Load more button */}
-			{catalog.hasMore && (
-				<div className="mt-10 text-center">
-					<button
-						onClick={catalog.loadMore}
-						disabled={catalog.isLoadingMore}
-						className="inline-flex items-center gap-2 px-6 py-2.5 text-[13px] font-medium text-muted border border-border rounded-lg hover:text-foreground hover:border-accent/40 transition-colors disabled:opacity-50"
-					>
-						{catalog.isLoadingMore ? (
-							<>
-								<div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted border-t-foreground" />
-								Loading...
-							</>
-						) : (
-							"Load more"
-						)}
-					</button>
-				</div>
-			)}
-		</>
-	);
-}
-
 export default function Home() {
 	const containerRef = useReveal();
-	const catalog = useCatalog();
-
-	const initialSkillIds = useMemo(
-		() => catalog.skills.map((s) => s.skillId),
-		// Only compute on first load
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[catalog.isLoading]
-	);
 
 	return (
 		<div ref={containerRef} className="min-h-screen">
@@ -445,35 +283,6 @@ export default function Home() {
 				</div>
 			</section>
 
-			{/* ═══ SEARCH ═══ */}
-			<section className="relative py-20 md:py-28 border-t border-border px-6">
-				<div className="relative max-w-4xl mx-auto text-center">
-					<p className="reveal text-[11px] font-mono tracking-[0.2em] uppercase text-muted mb-3">
-						Search
-					</p>
-					<h2 className="reveal text-2xl md:text-3xl font-semibold tracking-tight text-foreground mb-3">
-						Find skills across
-						<br className="hidden sm:block" />
-						<span className="text-muted">91,000+ options</span>
-					</h2>
-					<p className="reveal mt-4 text-[15px] text-muted max-w-xl mx-auto leading-relaxed mb-10">
-						Public skill discovery powered by{" "}
-						<a
-							href="https://skills.sh"
-							target="_blank"
-							rel="noopener noreferrer"
-							className="text-foreground hover:text-accent transition-colors"
-						>
-							skills.sh
-						</a>
-						. Search by keyword, filter by agent, and install directly from results.
-					</p>
-
-					<div className="reveal max-w-lg mx-auto">
-						<SkillSearch />
-					</div>
-				</div>
-			</section>
 
 			{/* ═══ AGENT LOGOS ═══ */}
 			<section className="py-12 border-t border-border">
@@ -494,60 +303,6 @@ export default function Home() {
 				</div>
 			</section>
 
-			{/* ═══ BROWSE SKILLS ═══ */}
-			<section id="skills" className="py-20 md:py-28 border-t border-border">
-				<div className="max-w-6xl mx-auto px-6">
-					<div className="reveal flex items-end justify-between mb-12 md:mb-16">
-						<div>
-							<p className="text-[11px] font-mono tracking-[0.2em] uppercase text-muted mb-3">
-								Catalog
-							</p>
-							<h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
-								Browse skills
-								{catalog.total > 0 && (
-									<span className="ml-3 text-[14px] font-normal text-muted">
-										{catalog.total.toLocaleString()} total
-									</span>
-								)}
-							</h2>
-						</div>
-					</div>
-
-					{/* Loading skeleton */}
-					{catalog.isLoading && (
-						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-							{Array.from({ length: 6 }).map((_, i) => (
-								<div
-									key={i}
-									className="bg-card-bg border border-card-border rounded-xl p-5 animate-pulse"
-								>
-									<div className="flex items-start justify-between mb-3">
-										<div className="h-3 w-16 bg-surface-hover rounded" />
-										<div className="h-3 w-10 bg-surface-hover rounded" />
-									</div>
-									<div className="h-4 w-32 bg-surface-hover rounded mb-2" />
-									<div className="h-3 w-24 bg-surface-hover rounded mb-3" />
-									<div className="space-y-1.5">
-										<div className="h-3 w-full bg-surface-hover rounded" />
-										<div className="h-3 w-4/5 bg-surface-hover rounded" />
-									</div>
-									<div className="flex gap-2 mt-4">
-										<div className="h-4 w-14 bg-surface-hover rounded" />
-										<div className="h-4 w-14 bg-surface-hover rounded" />
-									</div>
-								</div>
-							))}
-						</div>
-					)}
-
-					{/* Real skill cards */}
-					{!catalog.isLoading && catalog.skills.length > 0 && (
-						<FavoritesProvider initialSkillIds={initialSkillIds}>
-							<CatalogGrid catalog={catalog} />
-						</FavoritesProvider>
-					)}
-				</div>
-			</section>
 
 			{/* ═══ FEATURES ═══ */}
 			<section id="features" className="py-20 md:py-28 border-t border-border">
