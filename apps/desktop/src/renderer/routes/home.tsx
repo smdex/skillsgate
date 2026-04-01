@@ -2,30 +2,9 @@ import { useEffect, useState, useMemo, useCallback, useRef } from "react"
 import { marked } from "marked"
 import { electronAPI } from "../lib/electron-api"
 import { SkillEditor } from "../components/skill-editor"
+import { AgentLogo, AgentLogoRow } from "../components/agent-logo"
 
-// Agent color mapping for dot badges
-const AGENT_COLORS: Record<string, string> = {
-  "claude-code": "#D97706",
-  cursor: "#2563EB",
-  "github-copilot": "#6366F1",
-  windsurf: "#0891B2",
-  cline: "#7C3AED",
-  continue: "#059669",
-  "codex-cli": "#DC2626",
-  amp: "#EA580C",
-  goose: "#4F46E5",
-  junie: "#B45309",
-  "kilo-code": "#0369A1",
-  opencode: "#0D9488",
-  openclaw: "#6D28D9",
-  "pear-ai": "#65A30D",
-  "roo-code": "#C026D3",
-  trae: "#0284C7",
-  zed: "#CA8A04",
-  universal: "#78716C",
-}
-
-// Map display names to registry keys for color lookup
+// Map display names to registry keys
 const DISPLAY_NAME_TO_KEY: Record<string, string> = {
   "Claude Code": "claude-code",
   Cursor: "cursor",
@@ -45,26 +24,6 @@ const DISPLAY_NAME_TO_KEY: Record<string, string> = {
   Trae: "trae",
   Zed: "zed",
   "Universal (.agents/skills)": "universal",
-}
-
-function getAgentColor(displayName: string): string {
-  const key = DISPLAY_NAME_TO_KEY[displayName] || displayName.toLowerCase().replace(/\s+/g, "-")
-  return AGENT_COLORS[key] || "#78716C"
-}
-
-function AgentDots({ agents }: { agents: string[] }) {
-  return (
-    <span className="flex items-center gap-1">
-      {agents.map((agent) => (
-        <span
-          key={agent}
-          title={agent}
-          className="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0"
-          style={{ backgroundColor: getAgentColor(agent) }}
-        />
-      ))}
-    </span>
-  )
 }
 
 function SearchIcon({ size = 16 }: { size?: number }) {
@@ -296,9 +255,10 @@ function LeftSidebar({
                   onDropOnAgent(agent.displayName)
                 }}
               >
-                <span className="truncate">{agent.displayName}</span>
+                <AgentLogo name={agent.displayName} shortCode={agent.shortCode} size={14} />
+                <span className="truncate ml-1.5">{agent.displayName}</span>
                 <span
-                  className={`text-[10px] font-mono ml-2 ${
+                  className={`text-[10px] font-mono ml-auto ${
                     selectedAgent === agent.displayName
                       ? "text-foreground"
                       : "text-muted"
@@ -620,7 +580,7 @@ function MiddlePanel({
                     {skill.name}
                   </span>
                   <span className="ml-2 flex-shrink-0">
-                    <AgentDots agents={skill.agents} />
+                    <AgentLogoRow agents={skill.agents} size={14} />
                   </span>
                 </button>
               )
@@ -804,10 +764,7 @@ function RemoveSkillDialog({ skill, onClose, onRemoveFromAgents, onRemoveAll }: 
                 onChange={() => toggleAgent(agent)}
                 className="rounded border-border accent-foreground"
               />
-              <span
-                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                style={{ backgroundColor: getAgentColor(agent) }}
-              />
+              <AgentLogo name={agent} size={14} />
               <span className="text-[12px] text-foreground">{agent}</span>
             </label>
           ))}
@@ -1060,7 +1017,7 @@ function RightPanel({ skill, content, contentLoading, collections, onContentSave
               <p className="text-sm text-muted mb-3">{skill.description}</p>
             )}
             <div className="flex items-center gap-1.5">
-              <AgentDots agents={skill.agents} />
+              <AgentLogoRow agents={skill.agents} size={16} />
             </div>
             <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted">
               <span className="rounded border border-border px-2 py-0.5">
