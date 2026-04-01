@@ -74,13 +74,13 @@ export function useSearch(query: string): UseSearchResult {
 
   const loadMore = useCallback(async () => {
     if (loading) return
-    if (results.length >= total) return
+    if (results.length >= total && total > 0) return
 
     setLoading(true)
     try {
-      const data = await searchSkills(query, PAGE_SIZE)
+      const data = await searchSkills(query, PAGE_SIZE, offset)
       setResults((prev) => [...prev, ...data.skills])
-      setTotal(data.total)
+      setTotal((prev) => prev + data.total)
       setOffset((prev) => prev + PAGE_SIZE)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)

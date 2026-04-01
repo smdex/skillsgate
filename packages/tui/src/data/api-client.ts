@@ -31,16 +31,15 @@ export interface SearchResult {
  */
 export async function searchSkills(
   query: string,
-  limit: number = 20
+  limit: number = 20,
+  offset: number = 0
 ): Promise<SearchResult> {
   // skills.sh requires a minimum 2-char query
   const q = query.trim() || "skill"
-  const params = new URLSearchParams({ q, limit: String(limit) })
+  const params = new URLSearchParams({ q, limit: String(limit), offset: String(offset) })
 
   const url = `${SKILLS_SH_BASE}/api/search?${params}`
-  const response = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-  })
+  const response = await fetch(url)
 
   if (!response.ok) {
     throw new Error(`Search failed (HTTP ${response.status})`)
