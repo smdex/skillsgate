@@ -811,7 +811,7 @@ function RightPanel({ skill, content, contentLoading, collections, onContentSave
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl px-8 py-6">
+        <div className="px-8 py-6">
           {/* Header */}
           <div className="mb-6">
             <div className="flex items-start justify-between gap-3 mb-2">

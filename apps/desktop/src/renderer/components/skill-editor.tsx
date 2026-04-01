@@ -78,6 +78,7 @@ export function SkillEditor({ content, onChange, onSave }: SkillEditorProps) {
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
   const onSaveRef = useRef(onSave)
+  const internalChange = useRef(false)
 
   // Keep refs up to date without recreating the editor
   useEffect(() => {
@@ -116,6 +117,7 @@ export function SkillEditor({ content, onChange, onSave }: SkillEditorProps) {
         placeholderExt("Start writing your SKILL.md content..."),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
+            internalChange.current = true
             onChangeRef.current(update.state.doc.toString())
           }
         }),
@@ -138,8 +140,14 @@ export function SkillEditor({ content, onChange, onSave }: SkillEditorProps) {
   }, [])
 
   // If parent replaces the content string entirely (e.g. switching skills),
-  // update the editor document to match.
+  // update the editor document to match. Skip if the change originated from
+  // the editor itself to avoid a feedback loop that causes lag.
   useEffect(() => {
+    if (internalChange.current) {
+      internalChange.current = false
+      return
+    }
+
     const view = viewRef.current
     if (!view) return
 
