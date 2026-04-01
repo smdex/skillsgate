@@ -1,7 +1,6 @@
 import { NavLink, useLocation } from "react-router-dom"
 import { useEffect, useState } from "react"
 import { ThemeToggle } from "@skillsgate/ui"
-import { useAuthStore } from "../lib/auth-store"
 import { electronAPI } from "../lib/electron-api"
 
 interface NavItem {
@@ -51,24 +50,6 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    to: "/favorites",
-    label: "Favorites",
-    icon: (
-      <svg
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-      </svg>
-    ),
-  },
-  {
     to: "/servers",
     label: "Servers",
     icon: (
@@ -106,27 +87,6 @@ const navItems: NavItem[] = [
         <path d="M3 7h18" />
         <path d="M6 12h12" />
         <path d="M10 17h4" />
-      </svg>
-    ),
-  },
-  {
-    to: "/dashboard",
-    label: "Dashboard",
-    icon: (
-      <svg
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <rect x="3" y="3" width="7" height="7" />
-        <rect x="14" y="3" width="7" height="7" />
-        <rect x="14" y="14" width="7" height="7" />
-        <rect x="3" y="14" width="7" height="7" />
       </svg>
     ),
   },
@@ -185,7 +145,6 @@ function FullNavButton({ to, label, icon, badge }: NavItem) {
 export function Sidebar() {
   const location = useLocation()
   const isHome = location.pathname === "/"
-  const { user, loading: authLoading, signIn } = useAuthStore()
   const [serverCount, setServerCount] = useState(0)
   const [appVersion, setAppVersion] = useState("")
 
@@ -226,34 +185,6 @@ export function Sidebar() {
 
         {/* Bottom section */}
         <div className="mt-auto pb-3 flex flex-col items-center gap-1 px-1.5">
-          {/* User avatar or sign-in */}
-          {!authLoading && (
-            user ? (
-              <button
-                title={user.name}
-                className="flex items-center justify-center w-9 h-9 rounded-lg"
-              >
-                {user.image ? (
-                  <img src={user.image} alt="" className="w-6 h-6 rounded-full" />
-                ) : (
-                  <div className="w-6 h-6 rounded-full bg-surface-hover border border-border flex items-center justify-center text-[9px] font-medium text-muted">
-                    {user.name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)}
-                  </div>
-                )}
-              </button>
-            ) : (
-              <button
-                onClick={signIn}
-                title="Sign in"
-                className="flex items-center justify-center w-9 h-9 rounded-lg text-muted hover:text-foreground hover:bg-surface-hover transition-colors"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-              </button>
-            )
-          )}
           <NavLink
             to="/settings"
             title="Settings"
@@ -307,7 +238,7 @@ export function Sidebar() {
           </span>
         </div>
         <span className="text-xs text-muted mt-1 block">
-          Desktop v{appVersion || "0.1.6"}
+          Desktop v{appVersion || "0.2.1"}
         </span>
       </div>
 
@@ -318,36 +249,8 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Bottom section: Auth + Settings + Theme */}
+      {/* Bottom section: Settings + Theme */}
       <div className="px-3 py-3 border-t border-border flex flex-col gap-1">
-        {/* Auth row */}
-        {!authLoading && (
-          user ? (
-            <div className="flex items-center gap-2.5 px-3 py-2">
-              {user.image ? (
-                <img src={user.image} alt="" className="w-6 h-6 rounded-full flex-shrink-0" />
-              ) : (
-                <div className="w-6 h-6 rounded-full bg-surface-hover border border-border flex items-center justify-center text-[9px] font-medium text-muted flex-shrink-0">
-                  {user.name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)}
-                </div>
-              )}
-              <span className="text-[12px] text-foreground font-medium truncate">
-                {user.name}
-              </span>
-            </div>
-          ) : (
-            <button
-              onClick={signIn}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] tracking-wide font-medium transition-colors text-muted hover:text-foreground hover:bg-surface-hover"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-              Sign in
-            </button>
-          )
-        )}
         <NavLink
           to="/settings"
           className={({ isActive }) =>

@@ -4,30 +4,22 @@ import { useStore, useDispatch } from "../store/context.js"
 import { useDb } from "../db/context.js"
 import { useDetectedAgents } from "../data/use-agents.js"
 import { useInstalledSkills } from "../data/use-installed-skills.js"
-import { useAuth } from "../data/use-auth.js"
 import { StatusBar } from "./status-bar.js"
 import { HelpOverlay } from "./help-overlay.js"
 import { HomeView } from "../views/home.js"
 import { SkillDetailView } from "../views/skill-detail.js"
 import { DiscoverView } from "../views/discover.js"
-import { FavoritesView } from "../views/favorites.js"
 import { ServersView } from "../views/servers.js"
 import { AddServerView } from "../views/add-server.js"
 import { ServerSkillsView } from "../views/server-skills.js"
 import { SettingsView } from "../views/settings.js"
-import { LoginView } from "../views/login.js"
 import { colors } from "../utils/colors.js"
 import type { ViewName } from "../store/types.js"
 
-function getTabOptions(favCount: number, serverCount: number) {
+function getTabOptions(serverCount: number) {
   return [
     { name: "Installed", description: "Locally installed skills", value: "home" },
     { name: "Discover", description: "Search the registry", value: "discover" },
-    {
-      name: favCount > 0 ? `Favorites (${favCount})` : "Favorites",
-      description: "Your starred skills",
-      value: "favorites",
-    },
     {
       name: serverCount > 0 ? `Servers (${serverCount})` : "Servers",
       description: "Remote SSH servers",
@@ -43,8 +35,7 @@ export function Layout() {
   const { servers } = useDb()
   const [serverCount, setServerCount] = useState(() => servers.list().length)
 
-  // Load auth, agent + skill data on mount
-  useAuth()
+  // Load agent + skill data on mount
   useDetectedAgents()
   useInstalledSkills()
 
@@ -71,14 +62,6 @@ export function Layout() {
       return
     }
 
-    // When on login view, only handle Escape -- let input keys pass through
-    if (state.activeView === "login") {
-      if (key.name === "escape") {
-        dispatch({ type: "GO_BACK" })
-      }
-      return
-    }
-
     // Help overlay toggle
     if (key.name === "?" || (key.shift && key.name === "/")) {
       dispatch({ type: "TOGGLE_HELP" })
@@ -98,18 +81,17 @@ export function Layout() {
     const activeView = state.activeView as string
     const inFormView = activeView === "detail" || activeView === "add-server"
       || activeView === "edit-server" || activeView === "settings"
-      || activeView === "server-skills" || activeView === "login"
+      || activeView === "server-skills"
     if (!inFormView) {
       if (key.name === "1") dispatch({ type: "NAVIGATE", view: "home" })
       if (key.name === "2") dispatch({ type: "NAVIGATE", view: "discover" })
-      if (key.name === "3") dispatch({ type: "NAVIGATE", view: "favorites" })
-      if (key.name === "4") {
+      if (key.name === "3") {
         setServerCount(servers.list().length)
         dispatch({ type: "NAVIGATE", view: "servers" })
       }
     }
 
-    // "s" to open settings (only from home/favorites views when not in search)
+    // "s" to open settings (only from home/servers views when not in search)
     if (key.name === "s" && (state.focusedPane as string) !== "search"
       && state.activeView !== "discover" && state.activeView !== "detail"
       && !inFormView) {
@@ -146,20 +128,14 @@ export function Layout() {
       return
     }
 
-    // "l" to navigate to login view (always -- allows re-login if token expired)
-    if (key.name === "l" && (state.focusedPane as string) !== "search" && activeView !== "detail" && activeView !== "login") {
-      dispatch({ type: "NAVIGATE", view: "login" })
-      return
-    }
-
-    // "r" to refresh installed skills (when not typing in search, not on login view)
-    if (key.name === "r" && (state.focusedPane as string) !== "search" && activeView !== "detail" && activeView !== "login") {
+    // "r" to refresh installed skills (when not typing in search)
+    if (key.name === "r" && (state.focusedPane as string) !== "search" && activeView !== "detail") {
       dispatch({ type: "REFRESH_SKILLS" })
       return
     }
   })
 
-  const TAB_OPTIONS = getTabOptions(state.favorites.length, serverCount)
+  const TAB_OPTIONS = getTabOptions(serverCount)
 
   const activeTabIndex = TAB_OPTIONS.findIndex(
     (t) => t.value === state.activeView
@@ -217,7 +193,6 @@ export function Layout() {
           <>
             {state.activeView === "home" && <HomeView />}
             {state.activeView === "discover" && <DiscoverView />}
-            {state.activeView === "favorites" && <FavoritesView />}
             {state.activeView === "servers" && <ServersView onServerCountChange={setServerCount} />}
             {(state.activeView === "add-server" || state.activeView === "edit-server") && (
               <AddServerView
@@ -229,7 +204,6 @@ export function Layout() {
               <ServerSkillsView serverId={state.selectedServerId} />
             )}
             {state.activeView === "settings" && <SettingsView />}
-            {state.activeView === "login" && <LoginView />}
             {state.activeView === "detail" && state.selectedSkill && (
               <SkillDetailView />
             )}
