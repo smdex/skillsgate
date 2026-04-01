@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, shell, nativeImage } from "electron"
 import path from "node:path"
-import { registerIpcHandlers } from "./ipc-handlers"
+import { registerIpcHandlers, setMainWindow } from "./ipc-handlers"
 import { SkillsFileWatcher } from "./file-watcher"
 import { closeDb } from "./db/index"
 import { initAutoUpdater } from "./auto-updater"
@@ -78,6 +78,10 @@ function createWindow(): void {
       }
     }
   })
+
+  // Give the IPC handlers a reference to the window so rescanAndCache
+  // can push skills:updated events to the renderer.
+  setMainWindow(mainWindow)
 
   // Start the file watcher once the window is created
   fileWatcher = new SkillsFileWatcher(mainWindow)

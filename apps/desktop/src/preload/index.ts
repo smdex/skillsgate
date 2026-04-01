@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Skills
   listInstalled: () => ipcRenderer.invoke("skills:list-installed"),
+  rescanSkills: () => ipcRenderer.invoke("skills:rescan"),
   installSkill: (source: string, agents: string[], scope: string) =>
     ipcRenderer.invoke("skills:install", source, agents, scope),
   installSkillViaCli: (source: string) =>

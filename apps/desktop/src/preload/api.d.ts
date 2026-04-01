@@ -100,6 +100,7 @@ declare global {
   interface ElectronAPI {
     detectAgents: () => Promise<DetectedAgent[]>
     listInstalled: () => Promise<InstalledSkill[]>
+    rescanSkills: () => Promise<InstalledSkill[]>
     installSkill: (
       source: string,
       agents: string[],

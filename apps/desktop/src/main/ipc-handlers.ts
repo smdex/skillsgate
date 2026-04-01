@@ -1,4 +1,4 @@
-import { ipcMain, shell } from "electron"
+import { ipcMain, shell, type BrowserWindow } from "electron"
 import os from "node:os"
 import path from "node:path"
 import fs from "node:fs/promises"
@@ -9,6 +9,7 @@ import { openDb } from "./db/index"
 import { SettingsStore } from "./db/settings"
 import { RemoteServerStore } from "./db/servers"
 import { RemoteSkillStore } from "./db/skills"
+import { loadCachedSkills, saveCachedSkills } from "./db/skills-cache"
 import { testConnection, syncRemoteServer, readRemoteFile, writeRemoteFile } from "./db/ssh"
 import { checkForAppUpdates, getUpdateState, quitAndInstallUpdate } from "./auto-updater"
 
@@ -590,8 +591,9 @@ async function detectAgents(): Promise<
   return detected
 }
 
-/** Scan all detected agents for installed skills, merging with lock file data */
-async function listInstalledSkills(): Promise<
+/** Scan all detected agents for installed skills, merging with lock file data.
+ *  Returns the full internal shape including folderName (needed for caching). */
+async function listInstalledSkillsInternal(): Promise<
   Array<{
     name: string
     description: string
@@ -607,6 +609,7 @@ async function listInstalledSkills(): Promise<
     sourceType?: string
     installedAt?: string
     updatedAt?: string
+    folderName: string
   }>
 > {
   const lock = await readSkillLock()
@@ -616,8 +619,13 @@ async function listInstalledSkills(): Promise<
       name: string
       description: string
       path: string
+      canonicalPath: string
       agents: string[]
       agentShortCodes: string[]
+      scope: "global" | "project" | "custom"
+      projectName: string | null
+      hasSupportingFiles: boolean
+      supportingFiles: SupportingFile[]
       source?: string
       sourceType?: string
       installedAt?: string
@@ -696,7 +704,53 @@ async function listInstalledSkills(): Promise<
     }
   }
 
-  return Array.from(skillMap.values()).map(({ folderName: _, ...rest }) => rest)
+  return Array.from(skillMap.values())
+}
+
+/** Internal skill type that includes folderName for cache storage. */
+type InternalSkill = Awaited<ReturnType<typeof listInstalledSkillsInternal>>[number]
+
+/** Strip the internal folderName field before sending to the renderer. */
+function toRendererSkills(skills: InternalSkill[]) {
+  return skills.map(
+    ({ folderName: _, ...rest }) => rest,
+  ) as Array<Omit<InternalSkill, "folderName">>
+}
+
+/** Backward-compatible wrapper -- returns the renderer-safe shape. */
+async function listInstalledSkills() {
+  const raw = await listInstalledSkillsInternal()
+  return toRendererSkills(raw)
+}
+
+// ---------------------------------------------------------------------------
+// Skills cache: rescan, save, and push to renderer
+// ---------------------------------------------------------------------------
+
+let _mainWindow: BrowserWindow | null = null
+
+/** Called from the main process to provide a window reference for pushing events. */
+export function setMainWindow(win: BrowserWindow): void {
+  _mainWindow = win
+}
+
+/**
+ * Run a full filesystem scan, persist results to the SQLite cache,
+ * and push the updated list to the renderer via the skills:updated event.
+ *
+ * Safe to call from anywhere (file watcher, IPC handler, etc.).
+ */
+async function rescanAndCache() {
+  const raw = await listInstalledSkillsInternal()
+  saveCachedSkills(raw)
+
+  const skills = toRendererSkills(raw)
+
+  if (_mainWindow && !_mainWindow.isDestroyed()) {
+    _mainWindow.webContents.send("skills:updated", skills)
+  }
+
+  return skills
 }
 
 // ---------------------------------------------------------------------------
@@ -926,9 +980,25 @@ export function registerIpcHandlers(): void {
     return detectAgents()
   })
 
-  // List all installed skills across all detected agents
+  // List all installed skills across all detected agents.
+  // Returns cached data instantly when available, then rescans in the
+  // background and pushes a skills:updated event when the fresh data is ready.
   ipcMain.handle("skills:list-installed", async () => {
-    return listInstalledSkills()
+    const cached = loadCachedSkills()
+    if (cached.length > 0) {
+      // Return stale-while-revalidate: send cached data now, rescan later
+      rescanAndCache().catch((err) => {
+        console.error("Background rescan failed:", err)
+      })
+      return toRendererSkills(cached)
+    }
+    // Cache is empty (first launch or cleared) -- do a full scan synchronously
+    return rescanAndCache()
+  })
+
+  // Force a full filesystem rescan, update the cache, and push to renderer
+  ipcMain.handle("skills:rescan", async () => {
+    return rescanAndCache()
   })
 
   // Read the content of a skill's SKILL.md file
@@ -1582,5 +1652,5 @@ Add your skill instructions here.
   )
 }
 
-// Export for use by file-watcher
-export { listInstalledSkills, detectAgents, agentRegistry }
+// Export for use by file-watcher and main process
+export { listInstalledSkills, rescanAndCache, detectAgents, agentRegistry }

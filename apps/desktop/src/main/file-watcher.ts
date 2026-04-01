@@ -2,7 +2,7 @@ import { BrowserWindow } from "electron"
 import fs from "node:fs"
 import path from "node:path"
 import os from "node:os"
-import { listInstalledSkills, detectAgents, agentRegistry } from "./ipc-handlers"
+import { rescanAndCache, detectAgents, agentRegistry } from "./ipc-handlers"
 
 const DEBOUNCE_MS = 500
 const CANONICAL_DIR = path.join(os.homedir(), ".agents", "skills")
@@ -86,11 +86,9 @@ export class SkillsFileWatcher {
     this.debounceTimer = setTimeout(async () => {
       this.debounceTimer = null
       try {
-        const updatedSkills = await listInstalledSkills()
-        // Only send if the window is still alive and not destroyed
-        if (!this.mainWindow.isDestroyed()) {
-          this.mainWindow.webContents.send("skills:updated", updatedSkills)
-        }
+        // rescanAndCache performs the full scan, saves to SQLite,
+        // and pushes skills:updated to the renderer automatically.
+        await rescanAndCache()
       } catch (err) {
         console.error("Rescan after file change failed:", err)
       }
