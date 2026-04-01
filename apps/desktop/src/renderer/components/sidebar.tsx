@@ -238,7 +238,7 @@ export function Sidebar() {
           </span>
         </div>
         <span className="text-xs text-muted mt-1 block">
-          Desktop v{appVersion || "0.3.0"}
+          Desktop v{appVersion || "0.3.1"}
         </span>
       </div>
 
