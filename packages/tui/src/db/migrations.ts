@@ -50,6 +50,26 @@ const MIGRATIONS: Migration[] = [
       INSERT OR IGNORE INTO schema_version VALUES (1);
     `,
   },
+  {
+    version: 2,
+    up: `
+      CREATE TABLE IF NOT EXISTS cached_skills (
+        canonical_path TEXT PRIMARY KEY,
+        folder_name TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        agents TEXT NOT NULL DEFAULT '[]',
+        agent_short_codes TEXT NOT NULL DEFAULT '[]',
+        scope TEXT NOT NULL DEFAULT 'global',
+        source TEXT,
+        source_type TEXT,
+        file_mod_time TEXT NOT NULL,
+        scanned_at TEXT NOT NULL
+      );
+
+      INSERT OR IGNORE INTO schema_version VALUES (2);
+    `,
+  },
 ]
 
 function getCurrentVersion(db: Database): number {

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react"
+import { useEffect, useState, useMemo, useCallback, useRef } from "react"
 import { marked } from "marked"
 import { electronAPI } from "../lib/electron-api"
 import { SkillEditor } from "../components/skill-editor"
@@ -411,6 +411,15 @@ interface MiddlePanelProps {
   dragSkill: DragSkillPayload | null
   onDragSkillStart: (skill: InstalledSkill) => void
   onDragSkillEnd: () => void
+  multiSelected: Set<string>
+  onMultiSelectToggle: (skill: InstalledSkill, e: React.MouseEvent) => void
+  onMultiSelectAll: () => void
+  onMultiSelectClear: () => void
+  collections: Record<string, string[]>
+  onBulkAddToCollection: (collectionName: string) => void
+  onBulkCreateCollection: () => void
+  onBulkDelete: () => void
+  listRef: React.RefObject<HTMLDivElement | null>
 }
 
 function MiddlePanel({
@@ -428,9 +437,34 @@ function MiddlePanel({
   dragSkill,
   onDragSkillStart,
   onDragSkillEnd,
+  multiSelected,
+  onMultiSelectToggle,
+  onMultiSelectAll,
+  onMultiSelectClear,
+  collections,
+  onBulkAddToCollection,
+  onBulkCreateCollection,
+  onBulkDelete,
+  listRef,
 }: MiddlePanelProps) {
+  const [showCollectionDropdown, setShowCollectionDropdown] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const isMultiSelectActive = multiSelected.size > 0
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!showCollectionDropdown) return
+    const handleClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowCollectionDropdown(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [showCollectionDropdown])
+
   return (
-    <div className="w-72 flex-shrink-0 flex flex-col border-r border-border bg-background">
+    <div className="w-72 flex-shrink-0 flex flex-col border-r border-border bg-background relative">
       {/* Search input */}
       <div className="p-3 border-b border-border">
         <div className="mb-2 flex items-center justify-between">
@@ -476,15 +510,25 @@ function MiddlePanel({
         </div>
       </div>
 
-      {/* Results count */}
-      <div className="px-3 py-2 text-[10px] uppercase tracking-widest text-muted">
-        {loading
-          ? "Scanning..."
-          : `${filteredSkills.length} skill${filteredSkills.length !== 1 ? "s" : ""}${selectedAgent ? ` in ${selectedAgent}` : ""}${selectedCollection ? ` in ${selectedCollection}` : ""}`}
+      {/* Results count and select all toggle */}
+      <div className="px-3 py-2 flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-widest text-muted">
+          {loading
+            ? "Scanning..."
+            : `${filteredSkills.length} skill${filteredSkills.length !== 1 ? "s" : ""}${selectedAgent ? ` in ${selectedAgent}` : ""}${selectedCollection ? ` in ${selectedCollection}` : ""}`}
+        </span>
+        {!loading && filteredSkills.length > 0 && (
+          <button
+            onClick={isMultiSelectActive ? onMultiSelectClear : onMultiSelectAll}
+            className="text-[10px] text-muted hover:text-foreground transition-colors"
+          >
+            {isMultiSelectActive ? "Deselect All" : "Select All"}
+          </button>
+        )}
       </div>
 
       {/* Scrollable skill list */}
-      <div className="flex-1 overflow-y-auto px-2 pb-2">
+      <div className={`flex-1 overflow-y-auto px-2 ${isMultiSelectActive ? "pb-14" : "pb-2"}`} ref={listRef} tabIndex={-1}>
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <p className="text-[12px] text-muted animate-fade-in">
@@ -519,34 +563,179 @@ function MiddlePanel({
           </div>
         ) : (
           <div className="flex flex-col gap-0.5">
-            {filteredSkills.map((skill) => (
-              <button
-                key={skill.canonicalPath}
-                onClick={() => onSelectSkill(skill)}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.effectAllowed = "move"
-                  onDragSkillStart(skill)
-                }}
-                onDragEnd={() => onDragSkillEnd()}
-                className={`flex items-center justify-between w-full px-2.5 py-2 rounded-md text-left transition-colors ${
-                  selectedSkillName === skill.name
-                    ? "bg-surface-hover text-foreground"
-                    : dragSkill?.canonicalPath === skill.canonicalPath
-                      ? "opacity-60 ring-1 ring-accent/40"
-                    : "text-muted hover:text-foreground hover:bg-surface-hover"
-                }`}
-              >
-                <span className="text-[12px] font-medium truncate flex-1 min-w-0">
-                  {skill.name}
-                </span>
-                <span className="ml-2 flex-shrink-0">
-                  <AgentDots agents={skill.agents} />
-                </span>
-              </button>
-            ))}
+            {filteredSkills.map((skill) => {
+              const isMultiChecked = multiSelected.has(skill.canonicalPath)
+              return (
+                <button
+                  key={skill.canonicalPath}
+                  onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey) {
+                      onMultiSelectToggle(skill, e)
+                    } else if (isMultiSelectActive) {
+                      // When multi-select is active, plain click toggles selection
+                      onMultiSelectToggle(skill, e)
+                    } else {
+                      onSelectSkill(skill)
+                    }
+                  }}
+                  draggable={!isMultiSelectActive}
+                  onDragStart={(e) => {
+                    if (isMultiSelectActive) {
+                      e.preventDefault()
+                      return
+                    }
+                    e.dataTransfer.effectAllowed = "move"
+                    onDragSkillStart(skill)
+                  }}
+                  onDragEnd={() => onDragSkillEnd()}
+                  className={`flex items-center w-full px-2.5 py-2 rounded-md text-left transition-colors ${
+                    isMultiChecked
+                      ? "bg-accent/10 text-foreground ring-1 ring-accent/30"
+                      : selectedSkillName === skill.name && !isMultiSelectActive
+                        ? "bg-surface-hover text-foreground"
+                        : dragSkill?.canonicalPath === skill.canonicalPath
+                          ? "opacity-60 ring-1 ring-accent/40"
+                          : "text-muted hover:text-foreground hover:bg-surface-hover"
+                  }`}
+                >
+                  {/* Checkbox shown when multi-select is active */}
+                  {isMultiSelectActive && (
+                    <span className="flex-shrink-0 mr-2">
+                      <span
+                        className={`inline-flex items-center justify-center w-4 h-4 rounded border transition-colors ${
+                          isMultiChecked
+                            ? "bg-accent border-accent text-white"
+                            : "border-border bg-surface"
+                        }`}
+                      >
+                        {isMultiChecked && (
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </span>
+                    </span>
+                  )}
+                  <span className="text-[12px] font-medium truncate flex-1 min-w-0">
+                    {skill.name}
+                  </span>
+                  <span className="ml-2 flex-shrink-0">
+                    <AgentDots agents={skill.agents} />
+                  </span>
+                </button>
+              )
+            })}
           </div>
         )}
+      </div>
+
+      {/* Floating action bar when skills are multi-selected */}
+      {isMultiSelectActive && (
+        <div className="absolute bottom-0 left-0 right-0 bg-surface border-t border-border px-3 py-2.5 shadow-[0_-4px_12px_rgba(0,0,0,0.25)]">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-foreground font-medium whitespace-nowrap">
+              {multiSelected.size} selected
+            </span>
+            <div className="flex-1" />
+            {/* Add to Collection */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setShowCollectionDropdown(!showCollectionDropdown)}
+                className="rounded-md border border-border px-2 py-1 text-[11px] text-foreground hover:bg-surface-hover transition-colors flex items-center gap-1"
+              >
+                <span>Collection</span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              {showCollectionDropdown && (
+                <div className="absolute bottom-full left-0 mb-1 w-48 rounded-lg border border-border bg-surface shadow-lg z-10 py-1 max-h-48 overflow-y-auto">
+                  {Object.keys(collections).length > 0 && (
+                    <>
+                      {Object.keys(collections).sort().map((name) => (
+                        <button
+                          key={name}
+                          onClick={() => {
+                            onBulkAddToCollection(name)
+                            setShowCollectionDropdown(false)
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-[12px] text-foreground hover:bg-surface-hover transition-colors"
+                        >
+                          {name}
+                        </button>
+                      ))}
+                      <hr className="border-border my-1" />
+                    </>
+                  )}
+                  <button
+                    onClick={() => {
+                      setShowCollectionDropdown(false)
+                      onBulkCreateCollection()
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-[12px] text-accent hover:bg-surface-hover transition-colors"
+                  >
+                    + New Collection
+                  </button>
+                </div>
+              )}
+            </div>
+            {/* Delete */}
+            <button
+              onClick={onBulkDelete}
+              className="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[11px] text-red-400 hover:bg-red-500/20 transition-colors"
+            >
+              Delete
+            </button>
+            {/* Cancel */}
+            <button
+              onClick={onMultiSelectClear}
+              className="rounded-md px-2 py-1 text-[11px] text-muted hover:text-foreground transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// --------------------------------------------------------------------------
+// Bulk Delete Confirmation Dialog
+// --------------------------------------------------------------------------
+
+function BulkDeleteDialog({
+  count,
+  onConfirm,
+  onCancel,
+}: {
+  count: number
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-surface border border-border rounded-xl shadow-lg w-full max-w-sm mx-4 p-5 animate-slide-down">
+        <h2 className="text-[14px] font-semibold text-foreground mb-1">
+          Delete {count} skill{count !== 1 ? "s" : ""}?
+        </h2>
+        <p className="text-[12px] text-muted mb-5">
+          This will remove {count === 1 ? "this skill" : `all ${count} selected skills`} from every agent where {count === 1 ? "it is" : "they are"} installed. This action cannot be undone.
+        </p>
+        <div className="flex items-center gap-2 justify-end">
+          <button
+            onClick={onCancel}
+            className="text-muted text-[12px] px-4 py-1.5 hover:text-foreground transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="bg-red-600 text-white text-[12px] px-4 py-1.5 rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Delete {count} skill{count !== 1 ? "s" : ""}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -1210,6 +1399,11 @@ export function Home() {
   const [dragSkill, setDragSkill] = useState<DragSkillPayload | null>(null)
   const [dragOverTarget, setDragOverTarget] = useState<string | null>(null)
   const [dragToast, setDragToast] = useState<DragToast | null>(null)
+  const [multiSelected, setMultiSelected] = useState<Set<string>>(new Set())
+  const [lastMultiSelectIndex, setLastMultiSelectIndex] = useState<number | null>(null)
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false)
+  const [pendingBulkCollection, setPendingBulkCollection] = useState(false)
+  const skillListRef = useRef<HTMLDivElement>(null)
   const [collectionDialog, setCollectionDialog] = useState<{
     open: boolean
     mode: "create" | "rename"
@@ -1508,6 +1702,172 @@ export function Home() {
     setCollectionDialog((prev) => ({ ...prev, open: false }))
   }, [collectionDialog, collections, persistCollections, selectedCollection])
 
+  // -- Multi-select handlers --
+
+  const handleMultiSelectToggle = useCallback((skill: InstalledSkill, e: React.MouseEvent) => {
+    const path = skill.canonicalPath
+
+    if (e.shiftKey && lastMultiSelectIndex !== null) {
+      // Shift+click: select range
+      const currentIndex = filteredSkills.findIndex((s) => s.canonicalPath === path)
+      if (currentIndex === -1) return
+      const start = Math.min(lastMultiSelectIndex, currentIndex)
+      const end = Math.max(lastMultiSelectIndex, currentIndex)
+      setMultiSelected((prev) => {
+        const next = new Set(prev)
+        for (let i = start; i <= end; i++) {
+          next.add(filteredSkills[i].canonicalPath)
+        }
+        return next
+      })
+    } else {
+      // Cmd/Ctrl+click or plain click while multi-select active: toggle single
+      setMultiSelected((prev) => {
+        const next = new Set(prev)
+        if (next.has(path)) {
+          next.delete(path)
+        } else {
+          next.add(path)
+        }
+        return next
+      })
+      const currentIndex = filteredSkills.findIndex((s) => s.canonicalPath === path)
+      setLastMultiSelectIndex(currentIndex)
+    }
+  }, [filteredSkills, lastMultiSelectIndex])
+
+  const handleMultiSelectAll = useCallback(() => {
+    setMultiSelected(new Set(filteredSkills.map((s) => s.canonicalPath)))
+    setLastMultiSelectIndex(null)
+  }, [filteredSkills])
+
+  const handleMultiSelectClear = useCallback(() => {
+    setMultiSelected(new Set())
+    setLastMultiSelectIndex(null)
+  }, [])
+
+  // Clear multi-selection when the filtered list changes significantly
+  useEffect(() => {
+    if (multiSelected.size === 0) return
+    const visiblePaths = new Set(filteredSkills.map((s) => s.canonicalPath))
+    setMultiSelected((prev) => {
+      const next = new Set<string>()
+      for (const path of prev) {
+        if (visiblePaths.has(path)) next.add(path)
+      }
+      if (next.size === prev.size) return prev
+      return next
+    })
+  }, [filteredSkills, multiSelected.size])
+
+  const handleBulkAddToCollection = useCallback((collectionName: string) => {
+    const next = { ...collections }
+    const target = new Set(next[collectionName] || [])
+    for (const path of multiSelected) {
+      target.add(path)
+    }
+    next[collectionName] = Array.from(target).sort()
+    void persistCollections(next)
+    setMultiSelected(new Set())
+    setLastMultiSelectIndex(null)
+  }, [collections, multiSelected, persistCollections])
+
+  const handleBulkCreateCollection = useCallback(() => {
+    setPendingBulkCollection(true)
+    setCollectionDialog({
+      open: true,
+      mode: "create",
+      initialName: "",
+      targetName: null,
+    })
+  }, [])
+
+  // Extend handleCollectionDialogSubmit to also handle pending bulk adds
+  const handleCollectionDialogSubmitWrapped = useCallback((name: string) => {
+    handleCollectionDialogSubmit(name)
+
+    if (pendingBulkCollection && name.trim()) {
+      // After creating the collection, add the selected skills to it
+      const collectionName = name.trim()
+      // Need to schedule this for after the collection is persisted
+      setTimeout(() => {
+        const next = { ...collections }
+        if (!next[collectionName]) next[collectionName] = []
+        const target = new Set(next[collectionName])
+        for (const path of multiSelected) {
+          target.add(path)
+        }
+        next[collectionName] = Array.from(target).sort()
+        void persistCollections(next)
+        setMultiSelected(new Set())
+        setLastMultiSelectIndex(null)
+      }, 0)
+      setPendingBulkCollection(false)
+    }
+  }, [handleCollectionDialogSubmit, pendingBulkCollection, collections, multiSelected, persistCollections])
+
+  const handleBulkDelete = useCallback(() => {
+    setShowBulkDeleteDialog(true)
+  }, [])
+
+  const handleBulkDeleteConfirm = useCallback(async () => {
+    const pathsToDelete = new Set(multiSelected)
+    const skillNames = skills
+      .filter((s) => pathsToDelete.has(s.canonicalPath))
+      .map((s) => s.name)
+
+    for (const name of skillNames) {
+      try {
+        await electronAPI.removeSkill(name)
+      } catch (err) {
+        console.error(`Failed to remove skill "${name}":`, err)
+      }
+    }
+
+    // If the currently viewed skill was deleted, clear it
+    if (selectedSkill && pathsToDelete.has(selectedSkill.canonicalPath)) {
+      setSelectedSkill(null)
+      setSkillContent(null)
+    }
+
+    setShowBulkDeleteDialog(false)
+    setMultiSelected(new Set())
+    setLastMultiSelectIndex(null)
+
+    try {
+      const installedSkills = await electronAPI.listInstalled()
+      setSkills(installedSkills)
+    } catch (err) {
+      console.error("Failed to refresh skills after bulk removal:", err)
+    }
+  }, [multiSelected, skills, selectedSkill])
+
+  // Keyboard shortcuts: Escape to clear selection, Cmd/Ctrl+A to select all
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape clears multi-selection
+      if (e.key === "Escape" && multiSelected.size > 0) {
+        e.preventDefault()
+        setMultiSelected(new Set())
+        setLastMultiSelectIndex(null)
+        return
+      }
+
+      // Cmd/Ctrl+A selects all visible skills when the skill list is focused
+      if ((e.metaKey || e.ctrlKey) && e.key === "a") {
+        const listEl = skillListRef.current
+        if (listEl && listEl.contains(document.activeElement)) {
+          e.preventDefault()
+          setMultiSelected(new Set(filteredSkills.map((s) => s.canonicalPath)))
+          setLastMultiSelectIndex(null)
+        }
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown)
+    return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [multiSelected, filteredSkills])
+
   return (
     <div className="flex h-full">
       {/* Column 1: Left sidebar (filter panel) */}
@@ -1554,6 +1914,15 @@ export function Home() {
           setDragSkill(null)
           setDragOverTarget(null)
         }}
+        multiSelected={multiSelected}
+        onMultiSelectToggle={handleMultiSelectToggle}
+        onMultiSelectAll={handleMultiSelectAll}
+        onMultiSelectClear={handleMultiSelectClear}
+        collections={collections}
+        onBulkAddToCollection={handleBulkAddToCollection}
+        onBulkCreateCollection={handleBulkCreateCollection}
+        onBulkDelete={handleBulkDelete}
+        listRef={skillListRef}
       />
 
       {/* Column 3: Skill detail */}
@@ -1580,11 +1949,20 @@ export function Home() {
         open={collectionDialog.open}
         mode={collectionDialog.mode}
         initialName={collectionDialog.initialName}
-        onClose={() =>
+        onClose={() => {
           setCollectionDialog((prev) => ({ ...prev, open: false }))
-        }
-        onSubmit={handleCollectionDialogSubmit}
+          setPendingBulkCollection(false)
+        }}
+        onSubmit={handleCollectionDialogSubmitWrapped}
       />
+
+      {showBulkDeleteDialog && (
+        <BulkDeleteDialog
+          count={multiSelected.size}
+          onConfirm={handleBulkDeleteConfirm}
+          onCancel={() => setShowBulkDeleteDialog(false)}
+        />
+      )}
 
       {dragSkill && (
         <div className="pointer-events-none fixed bottom-6 right-6 z-40 rounded-full border border-accent/40 bg-surface px-4 py-2 text-[12px] text-foreground shadow-lg">
