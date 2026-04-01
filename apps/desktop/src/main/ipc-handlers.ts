@@ -1097,6 +1097,71 @@ export function registerIpcHandlers(): void {
     },
   )
 
+  // Search skills.sh from main process (avoids CORS)
+  ipcMain.handle(
+    "skills:search-catalog",
+    async (
+      _event,
+      query: string,
+      limit: number = 30,
+      offset: number = 0,
+    ): Promise<{ skills: { id: string; skillId: string; name: string; installs: number; source: string }[]; count: number }> => {
+      const q = query.trim().length >= 2 ? query.trim() : "skill"
+      const url = `https://skills.sh/api/search?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`skills.sh search failed (HTTP ${res.status})`)
+      const data = await res.json()
+      return { skills: data.skills ?? [], count: data.count ?? 0 }
+    },
+  )
+
+  // Fetch SKILL.md content from GitHub raw (avoids CORS)
+  const branchCache = new Map<string, string>()
+
+  ipcMain.handle(
+    "skills:fetch-content",
+    async (
+      _event,
+      source: string,
+      skillId: string,
+    ): Promise<string | null> => {
+      // Resolve default branch
+      let branch = branchCache.get(source)
+      if (!branch) {
+        try {
+          const res = await fetch(`https://api.github.com/repos/${source}`)
+          if (res.ok) {
+            const data = await res.json()
+            branch = data.default_branch || "main"
+          } else {
+            branch = "main"
+          }
+        } catch {
+          branch = "main"
+        }
+        branchCache.set(source, branch)
+      }
+
+      const paths = [
+        `skills/${skillId}/SKILL.md`,
+        `skills/.curated/${skillId}/SKILL.md`,
+        `skills/.experimental/${skillId}/SKILL.md`,
+        `${skillId}/SKILL.md`,
+        `SKILL.md`,
+      ]
+
+      for (const p of paths) {
+        try {
+          const res = await fetch(`https://raw.githubusercontent.com/${source}/${branch}/${p}`)
+          if (res.ok) return await res.text()
+        } catch {
+          continue
+        }
+      }
+      return null
+    },
+  )
+
   // Install a skill using the `npx skills add` CLI command
   ipcMain.handle(
     "skills:install-via-cli",

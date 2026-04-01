@@ -108,6 +108,15 @@ declare global {
     installSkillViaCli: (
       source: string,
     ) => Promise<{ success: boolean; output: string; error?: string }>
+    searchCatalog: (
+      query: string,
+      limit?: number,
+      offset?: number,
+    ) => Promise<{ skills: { id: string; skillId: string; name: string; installs: number; source: string }[]; count: number }>
+    fetchSkillContent: (
+      source: string,
+      skillId: string,
+    ) => Promise<string | null>
     createSkill: (data: {
       name: string
       description?: string

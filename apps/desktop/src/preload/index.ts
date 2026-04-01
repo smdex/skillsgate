@@ -10,6 +10,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("skills:install", source, agents, scope),
   installSkillViaCli: (source: string) =>
     ipcRenderer.invoke("skills:install-via-cli", source),
+  searchCatalog: (query: string, limit?: number, offset?: number) =>
+    ipcRenderer.invoke("skills:search-catalog", query, limit, offset),
+  fetchSkillContent: (source: string, skillId: string) =>
+    ipcRenderer.invoke("skills:fetch-content", source, skillId),
   createSkill: (data: {
     name: string
     description?: string

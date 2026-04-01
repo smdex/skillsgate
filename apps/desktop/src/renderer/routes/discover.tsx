@@ -3,12 +3,6 @@ import { marked } from "marked"
 import { electronAPI } from "../lib/electron-api"
 
 // ---------------------------------------------------------------------------
-// API constants
-// ---------------------------------------------------------------------------
-
-const SKILLS_SH_API = "https://skills.sh/api"
-
-// ---------------------------------------------------------------------------
 // Types matching the skills.sh response shape
 // ---------------------------------------------------------------------------
 
@@ -18,69 +12,6 @@ interface CatalogSkill {
   name: string
   installs: number
   source: string
-}
-
-interface SkillsShSearchResponse {
-  skills: CatalogSkill[]
-  count: number
-}
-
-// ---------------------------------------------------------------------------
-// Default branch cache (avoids repeated GitHub API calls per repo)
-// ---------------------------------------------------------------------------
-
-const defaultBranchCache = new Map<string, string>()
-
-async function getDefaultBranch(source: string): Promise<string> {
-  const cached = defaultBranchCache.get(source)
-  if (cached) return cached
-
-  try {
-    const res = await fetch(`https://api.github.com/repos/${source}`)
-    if (!res.ok) throw new Error(`GitHub API ${res.status}`)
-    const data = await res.json()
-    const branch = data.default_branch || "main"
-    defaultBranchCache.set(source, branch)
-    return branch
-  } catch {
-    // Fall back to "main" if the API call fails
-    return "main"
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Fetch SKILL.md content from GitHub raw, trying multiple paths
-// ---------------------------------------------------------------------------
-
-async function fetchSkillContent(
-  source: string,
-  skillId: string,
-  signal?: AbortSignal,
-): Promise<string | null> {
-  const branch = await getDefaultBranch(source)
-  const baseUrl = `https://raw.githubusercontent.com/${source}/${branch}`
-
-  const pathsToTry = [
-    `skills/${skillId}/SKILL.md`,
-    `skills/.curated/${skillId}/SKILL.md`,
-    `skills/.experimental/${skillId}/SKILL.md`,
-    `${skillId}/SKILL.md`,
-    `SKILL.md`,
-  ]
-
-  for (const p of pathsToTry) {
-    try {
-      const res = await fetch(`${baseUrl}/${p}`, { signal })
-      if (res.ok) {
-        return await res.text()
-      }
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return null
-      // Continue to next path
-    }
-  }
-
-  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -318,7 +249,7 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
     setLoading(true)
     setContent(null)
 
-    fetchSkillContent(skill.source, skill.skillId, controller.signal)
+    electronAPI.fetchSkillContent(skill.source, skill.skillId)
       .then((text) => {
         if (!cancelled) {
           setContent(text)
@@ -522,16 +453,16 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
 export function Discover() {
   const [skills, setSkills] = useState<CatalogSkill[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
-  const [searching, setSearching] = useState(false)
-  const [total, setTotal] = useState(0)
+  const [activeQuery, setActiveQuery] = useState("skill")
   const [selectedSkill, setSelectedSkill] = useState<CatalogSkill | null>(null)
   const [installedNames, setInstalledNames] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
-
-  const abortRef = useRef<AbortController | null>(null)
+  const [hasMore, setHasMore] = useState(true)
 
   const LIMIT = 30
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   // Load installed skills to mark installed state
   useEffect(() => {
@@ -541,59 +472,71 @@ export function Discover() {
     })
   }, [])
 
-  // Initial catalog load (empty query returns popular skills)
+  // Initial catalog load
   useEffect(() => {
-    // skills.sh requires a minimum 2-char query, so load popular skills on mount
-    fetchSkills("skill")
+    fetchSkills("skill", 0)
   }, [])
 
-  async function fetchSkills(query: string) {
-    if (abortRef.current) abortRef.current.abort()
-
-    const controller = new AbortController()
-    abortRef.current = controller
-
-    const isInitialLoad = !query.trim()
-    if (isInitialLoad) {
+  async function fetchSkills(query: string, offset: number) {
+    const isNewSearch = offset === 0
+    if (isNewSearch) {
       setLoading(true)
+      setActiveQuery(query)
     } else {
-      setSearching(true)
+      setLoadingMore(true)
     }
     setError(null)
 
     try {
-      const url = `${SKILLS_SH_API}/search?q=${encodeURIComponent(query)}&limit=${LIMIT}`
-      const res = await fetch(url, { signal: controller.signal })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data: SkillsShSearchResponse = await res.json()
+      const q = query.trim().length >= 2 ? query.trim() : "skill"
+      const data = await electronAPI.searchCatalog(q, LIMIT, offset)
 
-      setSkills(data.skills)
-      setTotal(data.count)
+      if (isNewSearch) {
+        setSkills(data.skills)
+      } else {
+        setSkills((prev) => [...prev, ...data.skills])
+      }
+      setHasMore(data.count >= LIMIT)
     } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return
-      setError(
-        isInitialLoad
-          ? "Failed to load catalog. Check your connection."
-          : "Search failed. Please try again.",
-      )
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(`Search failed: ${msg}`)
       console.error("Fetch error:", err)
     } finally {
       setLoading(false)
-      setSearching(false)
+      setLoadingMore(false)
     }
   }
 
   const handleSearchChange = useCallback((value: string) => {
     setSearchQuery(value)
-    if (!value.trim()) {
-      fetchSkills("")
-    }
   }, [])
 
   const handleSearchSubmit = useCallback(() => {
-    if (!searchQuery.trim()) return
-    fetchSkills(searchQuery.trim())
+    const q = searchQuery.trim()
+    fetchSkills(q.length >= 2 ? q : "skill", 0)
   }, [searchQuery])
+
+  const handleLoadMore = useCallback(() => {
+    if (loadingMore || !hasMore) return
+    fetchSkills(activeQuery, skills.length)
+  }, [loadingMore, hasMore, activeQuery, skills.length])
+
+  // Infinite scroll
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+
+    function onScroll() {
+      if (!el || loadingMore || !hasMore) return
+      const { scrollTop, scrollHeight, clientHeight } = el
+      if (scrollHeight - scrollTop - clientHeight < 200) {
+        handleLoadMore()
+      }
+    }
+
+    el.addEventListener("scroll", onScroll)
+    return () => el.removeEventListener("scroll", onScroll)
+  }, [handleLoadMore, loadingMore, hasMore])
 
   async function handleInstall(source: string, _agentNames: string[]) {
     const results = await electronAPI.installSkill(source, _agentNames, "global")
@@ -617,9 +560,9 @@ export function Discover() {
       <div className="px-8 pt-6 pb-4">
         <h2 className="text-xl font-bold text-foreground mb-1">Discover</h2>
         <p className="text-[12px] text-muted mb-5">
-          Browse and search skills.{" "}
-          {total > 0 && !searchQuery.trim() && (
-            <span className="font-mono">{total} skills available</span>
+          Browse and search skills from skills.sh.{" "}
+          {skills.length > 0 && (
+            <span className="font-mono">{skills.length} skills loaded</span>
           )}
         </p>
 
@@ -635,12 +578,12 @@ export function Discover() {
             onKeyDown={(e) => { if (e.key === "Enter") handleSearchSubmit() }}
             className="w-full pl-9 pr-10 py-2.5 rounded-lg bg-surface border border-border text-[13px] text-foreground placeholder:text-muted focus:outline-none focus:border-accent/40 transition-colors"
           />
-          {(searching || loading) && (
+          {loading && (
             <div className="absolute inset-y-0 right-3 flex items-center">
               <SpinnerIcon />
             </div>
           )}
-          {searchQuery && !searching && (
+          {searchQuery && !loading && (
             <button
               onClick={() => handleSearchChange("")}
               className="absolute inset-y-0 right-3 flex items-center text-muted hover:text-foreground transition-colors"
@@ -678,7 +621,7 @@ export function Discover() {
       )}
 
       {/* Grid */}
-      <div className="flex-1 overflow-y-auto px-8 pb-8">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-8">
         {loading && skills.length === 0 ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
@@ -709,16 +652,28 @@ export function Discover() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {skills.map((skill) => (
-              <SkillCard
-                key={skill.id}
-                skill={skill}
-                onSelect={setSelectedSkill}
-                installedNames={installedNames}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {skills.map((skill) => (
+                <SkillCard
+                  key={skill.id}
+                  skill={skill}
+                  onSelect={setSelectedSkill}
+                  installedNames={installedNames}
+                />
+              ))}
+            </div>
+            {loadingMore && (
+              <div className="flex justify-center py-6">
+                <SpinnerIcon />
+              </div>
+            )}
+            {!hasMore && skills.length > 0 && (
+              <p className="text-center text-[11px] text-muted py-4">
+                No more results
+              </p>
+            )}
+          </>
         )}
       </div>
 
