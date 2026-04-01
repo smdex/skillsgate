@@ -20,6 +20,9 @@ jobs:
           - os: ubuntu-latest
             target: bun-linux-x64
             pkg: tui-linux-x64
+          - os: ubuntu-latest
+            target: bun-linux-arm64
+            pkg: tui-linux-arm64
           - os: windows-latest
             target: bun-windows-x64
             pkg: tui-win32-x64
@@ -81,7 +84,7 @@ jobs:
         run: |
           VERSION="${RELEASE_REF_NAME#tui-v}"
           test -n "$VERSION"
-          for pkg in tui-darwin-arm64 tui-darwin-x64 tui-linux-x64 tui-win32-x64; do
+          for pkg in tui-darwin-arm64 tui-darwin-x64 tui-linux-x64 tui-linux-arm64 tui-win32-x64; do
             mkdir -p "dist/$pkg"
             ls artifacts/$pkg/
             cp -r artifacts/$pkg/* "dist/$pkg/"
@@ -90,6 +93,7 @@ jobs:
               tui-darwin-arm64) OS=darwin; CPU=arm64 ;;
               tui-darwin-x64)  OS=darwin; CPU=x64 ;;
               tui-linux-x64)   OS=linux;  CPU=x64 ;;
+              tui-linux-arm64) OS=linux;  CPU=arm64 ;;
               tui-win32-x64)   OS=win32;  CPU=x64 ;;
             esac
             cat > "dist/$pkg/package.json" <<PKGJSON

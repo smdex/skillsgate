@@ -14,54 +14,56 @@ import {
 
 const FEATURES = [
 	{
-		label: "SEARCH",
-		title: "Semantic search",
-		comingSoon: false,
+		label: "BROWSE",
+		title: "Visual skill browser",
 		description:
-			"Describe what you need in natural language. Our AI-powered search understands intent, not just keywords, to surface the right skills.",
+			"See every skill installed across all your agents in one place. Filter by agent, search by name, and preview content before making changes.",
 		icon: (
 			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-				<circle cx="11" cy="11" r="8" />
-				<line x1="21" y1="21" x2="16.65" y2="16.65" />
+				<rect x="3" y="3" width="7" height="7" />
+				<rect x="14" y="3" width="7" height="7" />
+				<rect x="3" y="14" width="7" height="7" />
+				<rect x="14" y="14" width="7" height="7" />
 			</svg>
 		),
 	},
 	{
-		label: "INSTALL",
-		title: "Universal install via MCP",
-		comingSoon: false,
+		label: "AGENTS",
+		title: "Per-agent skill control",
 		description:
-			"One command installs skills for Claude Code, Cursor, Windsurf, and 15+ other AI agents. Works everywhere the Model Context Protocol is supported.",
+			"Install a skill to Claude Code but not Cursor. Remove it from Windsurf but keep it in Copilot. Full control over which agents use which skills.",
 		icon: (
 			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-				<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-				<polyline points="7 10 12 15 17 10" />
-				<line x1="12" y1="15" x2="12" y2="3" />
+				<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+				<circle cx="9" cy="7" r="4" />
+				<path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+				<path d="M16 3.13a4 4 0 0 1 0 7.75" />
 			</svg>
 		),
 	},
 	{
-		label: "SECURITY",
-		title: "AI-powered security scanning",
-		comingSoon: false,
+		label: "EDITOR",
+		title: "Built-in markdown editor",
 		description:
-			"Scan any skill before installing. Detect prompt injection, data exfiltration, and malicious code using your own AI agent. Share results with the community to build collective trust.",
+			"Edit any SKILL.md with a CodeMirror-powered editor. Syntax highlighting, live preview, and save directly to the agent's config directory.",
 		icon: (
 			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-				<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+				<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+				<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
 			</svg>
 		),
 	},
 	{
-		label: "TRUST",
-		title: "Publisher trust tiers",
-		comingSoon: false,
+		label: "REMOTE",
+		title: "Remote server management",
 		description:
-			"Verified publishers from known organizations, established developers with track records, and transparent trust signals on every skill.",
+			"Connect to other machines via SSH. Browse, install, and sync skills on remote servers without leaving the app.",
 		icon: (
 			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-				<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-				<polyline points="22 4 12 14.01 9 11.01" />
+				<rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
+				<rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
+				<line x1="6" y1="6" x2="6.01" y2="6" />
+				<line x1="6" y1="18" x2="6.01" y2="18" />
 			</svg>
 		),
 	},
@@ -77,28 +79,41 @@ const AGENTS = [
 	"Continue",
 	"Amp",
 	"Goose",
+	"Roo Code",
+	"Zed",
+	"Aider",
+	"OpenCode",
+	"Kilo Code",
+	"Trae",
+	"VS Code (Copilot Chat)",
+	"Claude Desktop",
+	"Amazon Q",
 ];
 
 const FAQ_ITEMS = [
 	{
 		q: "What are agent skills?",
-		a: "Agent skills are reusable instructions (SKILL.md files) that extend what AI coding assistants can do. They give your agent procedural knowledge: how to audit a website, set up a database, follow design patterns, and more.",
+		a: "Agent skills are reusable instructions (SKILL.md files) that extend what AI coding agents can do. They give your agent procedural knowledge: how to audit a website, set up a database, follow design patterns, and more.",
 	},
 	{
-		q: "How do I install a skill?",
-		a: "Run `npx skillsgate install <skill-name>` in your terminal, or ask your AI agent to \"find a skill for...\" if you have the SkillsGate MCP server configured. Skills are installed locally in your project's .skillsgate/ directory.",
+		q: "Where do the 91k+ skills come from?",
+		a: "Public skill discovery is powered by skills.sh, an open index of skills from GitHub. SkillsGate provides the interface to browse, search, and install them to your agents.",
 	},
 	{
-		q: "Which AI tools are supported?",
-		a: "SkillsGate works with Claude Code, Cursor, Windsurf, GitHub Copilot, Codex CLI, Cline, Continue, Amp, Goose, and many more. Any tool that supports the SKILL.md format or the Model Context Protocol can use skills from SkillsGate.",
+		q: "Which AI agents are supported?",
+		a: "SkillsGate supports 18+ agents including Claude Code, Cursor, Windsurf, GitHub Copilot, Codex CLI, Cline, Continue, Amp, Goose, Roo Code, Zed, Aider, and more. Any agent that reads SKILL.md or .cursorrules-style files is compatible.",
 	},
 	{
-		q: "Are these skills safe to use?",
-		a: "Run `skillsgate scan <source>` to analyze any skill before installing. It uses your own AI coding tool (Claude Code, Codex, etc.) to detect prompt injection, malicious code, and suspicious behavior. Scan results are crowdsourced: after scanning, you can share findings with the community so others benefit too. Publishers also have trust tiers (Verified, Established, New).",
+		q: "What about private skills?",
+		a: "Create a free SkillsGate account to store private skills that sync across your machines. Private skills never appear in public search.",
 	},
 	{
 		q: "Is SkillsGate free?",
-		a: "Searching, browsing, and installing public skills is completely free.",
+		a: "Yes. The desktop app, TUI, browsing, and installing public skills are all free. Private skill storage requires a free account.",
+	},
+	{
+		q: "Desktop app or TUI?",
+		a: "Both share the same features and sync preferences via a local SQLite database. The desktop app (Electron) is best for visual browsing. The TUI is best for keyboard-driven workflows and headless servers.",
 	},
 ];
 
@@ -260,7 +275,7 @@ export default function Home() {
 		<div ref={containerRef} className="min-h-screen">
 			<Navbar />
 
-			{/* ═══ APPS SHOWCASE (primary) ═══ */}
+			{/* ═══ HERO ═══ */}
 			<section className="relative pt-32 pb-20 md:pt-44 md:pb-28 px-6 overflow-hidden">
 				{/* Subtle radial glow */}
 				<div
@@ -277,22 +292,31 @@ export default function Home() {
 							className="animate-fade-up text-[11px] md:text-[12px] font-mono tracking-[0.2em] uppercase text-muted mb-6"
 							style={{ animationDelay: "0.1s" }}
 						>
-							Discover and manage skills for every AI agent
+							The visual skill manager for AI agents
 						</p>
 						<h1
 							className="animate-fade-up text-[clamp(2.25rem,6vw,4.5rem)] font-semibold leading-[1.08] tracking-tight text-foreground"
 							style={{ animationDelay: "0.2s" }}
 						>
-							One app for every
+							Browse, organize, and
 							<br />
-							<span className="text-muted">agent skill</span>
+							<span className="text-muted">manage agent skills</span>
 						</h1>
 						<p
 							className="animate-fade-up mt-6 md:mt-8 text-[15px] md:text-[17px] leading-relaxed text-muted max-w-xl mx-auto"
 							style={{ animationDelay: "0.35s" }}
 						>
-							Browse, search, edit, and manage all your installed skills across
-							18 AI coding agents. Desktop app, terminal UI, and CLI.
+							91,000+ public skills from{" "}
+							<a
+								href="https://skills.sh"
+								target="_blank"
+								rel="noopener noreferrer"
+								className="text-foreground hover:text-accent transition-colors"
+							>
+								skills.sh
+							</a>
+							. 18 supported agents. Install to exactly the
+							agents you want. Edit with a built-in markdown editor.
 						</p>
 
 						{/* Download buttons */}
@@ -312,7 +336,7 @@ export default function Home() {
 								Download Desktop App
 							</a>
 							<code className="text-[12px] font-mono text-muted bg-code-bg px-4 py-3 rounded-lg border border-border">
-								npm install -g @skillsgate/tui
+								npx skillsgate
 							</code>
 						</div>
 
@@ -322,17 +346,17 @@ export default function Home() {
 							style={{ animationDelay: "0.6s" }}
 						>
 							<div className="text-center">
-								<div className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">80,000+</div>
-								<div className="text-[11px] font-mono tracking-wider uppercase text-muted mt-1">Skills indexed</div>
+								<div className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">91,000+</div>
+								<div className="text-[11px] font-mono tracking-wider uppercase text-muted mt-1">Public skills</div>
 							</div>
 							<div className="w-px h-8 bg-border" />
 							<div className="text-center">
 								<div className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">18</div>
-								<div className="text-[11px] font-mono tracking-wider uppercase text-muted mt-1">Agents</div>
+								<div className="text-[11px] font-mono tracking-wider uppercase text-muted mt-1">Agents supported</div>
 							</div>
 							<div className="w-px h-8 bg-border" />
 							<div className="text-center">
-								<div className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">3</div>
+								<div className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">2</div>
 								<div className="text-[11px] font-mono tracking-wider uppercase text-muted mt-1">Interfaces</div>
 							</div>
 						</div>
@@ -376,10 +400,10 @@ export default function Home() {
 							</h3>
 							<p className="text-[14px] text-muted leading-relaxed mb-6">
 								Navigate with j/k, search with /, install with i, edit with e.
-								Everything you need without leaving the terminal. Supports keyword and AI-powered semantic search.
+								Everything you need without leaving the terminal. Works on headless servers over SSH.
 							</p>
 							<code className="inline-block text-[12px] font-mono text-muted bg-code-bg px-3 py-1.5 rounded-md border border-border">
-								$ npm install -g @skillsgate/tui
+								$ npx skillsgate
 							</code>
 						</div>
 						<div className="relative">
@@ -400,15 +424,15 @@ export default function Home() {
 					{/* Feature cards */}
 					<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-14">
 						<div className="bg-card-bg border border-card-border rounded-xl p-6">
-							<h3 className="text-[14px] font-semibold text-foreground mb-1.5">Per-agent management</h3>
+							<h3 className="text-[14px] font-semibold text-foreground mb-1.5">Private skills</h3>
 							<p className="text-[12px] text-muted leading-relaxed">
-								Remove a skill from Cursor but keep it in Claude Code. Full control over which agents use which skills.
+								Sign in with a free SkillsGate account to store private skills that sync across your devices and never appear in public search.
 							</p>
 						</div>
 						<div className="bg-card-bg border border-card-border rounded-xl p-6">
 							<h3 className="text-[14px] font-semibold text-foreground mb-1.5">Remote servers</h3>
 							<p className="text-[12px] text-muted leading-relaxed">
-								Connect to other machines via SSH to browse and sync skills. Manage skills across your fleet.
+								Connect to other machines via SSH to browse and manage skills. Keep your fleet in sync.
 							</p>
 						</div>
 						<div className="bg-card-bg border border-card-border rounded-xl p-6">
@@ -421,39 +445,41 @@ export default function Home() {
 				</div>
 			</section>
 
-			{/* ═══ SEMANTIC SEARCH ═══ */}
+			{/* ═══ SEARCH ═══ */}
 			<section className="relative py-20 md:py-28 border-t border-border px-6">
 				<div className="relative max-w-4xl mx-auto text-center">
 					<p className="reveal text-[11px] font-mono tracking-[0.2em] uppercase text-muted mb-3">
 						Search
 					</p>
 					<h2 className="reveal text-2xl md:text-3xl font-semibold tracking-tight text-foreground mb-3">
-						Find the right skill
+						Find skills across
 						<br className="hidden sm:block" />
-						<span className="text-muted">for any agent</span>
+						<span className="text-muted">91,000+ options</span>
 					</h2>
 					<p className="reveal mt-4 text-[15px] text-muted max-w-xl mx-auto leading-relaxed mb-10">
-						AI-powered semantic search across 80,000+ skills. Describe what you need in natural language.
+						Public skill discovery powered by{" "}
+						<a
+							href="https://skills.sh"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="text-foreground hover:text-accent transition-colors"
+						>
+							skills.sh
+						</a>
+						. Search by keyword, filter by agent, and install directly from results.
 					</p>
 
 					<div className="reveal max-w-lg mx-auto">
 						<SkillSearch />
 					</div>
-
-					<div className="reveal mt-6 flex items-center justify-center">
-						<code className="text-[12px] font-mono text-muted bg-code-bg px-3 py-1.5 rounded-md border border-border">
-							$ npx skillsgate search "react best practices"
-						</code>
-					</div>
 				</div>
 			</section>
-
 
 			{/* ═══ AGENT LOGOS ═══ */}
 			<section className="py-12 border-t border-border">
 				<div className="max-w-5xl mx-auto px-6">
 					<p className="reveal text-[11px] font-mono tracking-[0.2em] uppercase text-muted text-center mb-8">
-						Available for these agents
+						Works with these agents
 					</p>
 					<div className="reveal flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
 						{AGENTS.map((agent) => (
@@ -528,12 +554,12 @@ export default function Home() {
 				<div className="max-w-6xl mx-auto px-6">
 					<div className="reveal text-center mb-14 md:mb-20">
 						<p className="text-[11px] font-mono tracking-[0.2em] uppercase text-muted mb-3">
-							Platform
+							Features
 						</p>
 						<h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
-							Built for trust and
+							Everything you need to
 							<br className="hidden sm:block" />
-							developer experience
+							manage agent skills
 						</h2>
 					</div>
 
@@ -549,11 +575,6 @@ export default function Home() {
 									<span className="text-[10px] font-mono tracking-[0.2em] uppercase text-muted">
 										{feature.label}
 									</span>
-									{feature.comingSoon && (
-										<span className="text-[9px] font-mono tracking-wider uppercase text-accent bg-surface-hover px-2 py-0.5 rounded-full">
-											Coming soon
-										</span>
-									)}
 								</div>
 								<h3 className="text-[17px] font-semibold text-foreground mb-3">
 									{feature.title}
@@ -586,22 +607,24 @@ export default function Home() {
 							{
 								step: "01",
 								title: "Search",
-								desc: 'Describe what you need: "help me write better React tests" or "audit my website for SEO issues"',
-								code: '$ npx skillsgate search "react testing"',
+								desc: "Type what you need. SkillsGate searches 91,000+ public skills and returns the most relevant results.",
 							},
 							{
 								step: "02",
-								title: "Discover",
-								desc: "Semantic search surfaces the most relevant skills, ranked by quality and community trust.",
-								code: null,
+								title: "Preview",
+								desc: "Read the full SKILL.md content, check the source repository, and see which agents it supports.",
 							},
 							{
 								step: "03",
 								title: "Install",
-								desc: "One command adds the skill to your project. It works with your AI agent immediately.",
-								code: "$ npx skillsgate install react-best-practices",
+								desc: "Pick the agents you want it in. SkillsGate writes the skill to the right config directory for each agent.",
 							},
-						].map((item, i) => (
+							{
+								step: "04",
+								title: "Edit",
+								desc: "Customize any skill with the built-in markdown editor. Your changes stay local to that agent.",
+							},
+						].map((item) => (
 							<div
 								key={item.step}
 								className="flex gap-6 md:gap-10 py-8 border-b border-border last:border-0"
@@ -613,197 +636,12 @@ export default function Home() {
 									<h3 className="text-[17px] font-semibold text-foreground mb-2">
 										{item.title}
 									</h3>
-									<p className="text-[14px] text-muted leading-relaxed mb-3">
+									<p className="text-[14px] text-muted leading-relaxed">
 										{item.desc}
 									</p>
-									{item.code && (
-										<code className="inline-block text-[12px] font-mono text-muted bg-code-bg px-3 py-1.5 rounded-md border border-border">
-											{item.code}
-										</code>
-									)}
 								</div>
 							</div>
 						))}
-					</div>
-				</div>
-			</section>
-
-			{/* ═══ INSTALL / MCP SETUP ═══ */}
-			<section className="py-20 md:py-28 border-t border-border">
-				<div className="max-w-5xl mx-auto px-6">
-					<div className="reveal text-center mb-14 md:mb-20">
-						<p className="text-[11px] font-mono tracking-[0.2em] uppercase text-muted mb-3">
-							Install
-						</p>
-						<h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
-							Set up in 30 seconds
-						</h2>
-						<p className="mt-4 text-[15px] text-muted max-w-lg mx-auto leading-relaxed">
-							One global install, one setup command. Your AI agent gets 12 new
-							tools to search, install, publish, and scan skills.
-						</p>
-					</div>
-
-					{/* Terminal mockup */}
-					<div className="reveal max-w-2xl mx-auto mb-14">
-						<div className="bg-card-bg border border-card-border rounded-xl overflow-hidden">
-							{/* Terminal header */}
-							<div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-								<div className="flex gap-1.5">
-									<div className="w-2.5 h-2.5 rounded-full bg-muted/20" />
-									<div className="w-2.5 h-2.5 rounded-full bg-muted/20" />
-									<div className="w-2.5 h-2.5 rounded-full bg-muted/20" />
-								</div>
-								<span className="text-[11px] font-mono text-muted/40 ml-2">Terminal</span>
-							</div>
-							{/* Terminal body */}
-							<div className="p-5 font-mono text-[12px] leading-6 space-y-1">
-								<p className="text-muted">$ npm install -g skillsgate</p>
-								<p className="text-muted/60 mt-3">✔ Installed skillsgate v0.2.0</p>
-								<p className="text-muted mt-4">$ skillsgate setup</p>
-								<p className="text-muted/60 mt-3">Detected AI tools:</p>
-								<p className="text-foreground">  ✔ Claude Code <span className="text-muted/40">(~/.claude.json)</span></p>
-								<p className="text-foreground">  ✔ Cursor <span className="text-muted/40">(~/.cursor/mcp.json)</span></p>
-								<p className="text-foreground">  ✔ Windsurf <span className="text-muted/40">(~/.windsurf/mcp.json)</span></p>
-								<p className="text-muted/60 mt-3">◆ Auto-configure MCP for these tools? <span className="text-foreground">Yes</span></p>
-								<p className="text-muted/60 mt-3">✔ Added SkillsGate MCP to Claude Code</p>
-								<p className="text-muted/60">✔ Added SkillsGate MCP to Cursor</p>
-								<p className="text-muted/60">✔ Added SkillsGate MCP to Windsurf</p>
-								<p className="text-muted/60 mt-3">Done! Your AI agents can now search, install, and manage skills.</p>
-							</div>
-						</div>
-					</div>
-
-					{/* Three feature pills */}
-					<div className="reveal grid grid-cols-1 md:grid-cols-3 gap-4">
-						<div className="bg-card-bg border border-card-border rounded-xl p-6 text-center">
-							<div className="flex justify-center mb-3">
-								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
-									<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-									<polyline points="7 10 12 15 17 10" />
-									<line x1="12" y1="15" x2="12" y2="3" />
-								</svg>
-							</div>
-							<h3 className="text-[14px] font-semibold text-foreground mb-1.5">12 MCP tools</h3>
-							<p className="text-[12px] text-muted leading-relaxed">
-								Search, add, remove, update, sync, publish, scan, and more. All available to your AI agent.
-							</p>
-						</div>
-						<div className="bg-card-bg border border-card-border rounded-xl p-6 text-center">
-							<div className="flex justify-center mb-3">
-								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
-									<rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-									<line x1="8" y1="21" x2="16" y2="21" />
-									<line x1="12" y1="17" x2="12" y2="21" />
-								</svg>
-							</div>
-							<h3 className="text-[14px] font-semibold text-foreground mb-1.5">17+ agents supported</h3>
-							<p className="text-[12px] text-muted leading-relaxed">
-								Claude Code, Cursor, Windsurf, Copilot, Codex CLI, Cline, and many more.
-							</p>
-						</div>
-						<div className="bg-card-bg border border-card-border rounded-xl p-6 text-center">
-							<div className="flex justify-center mb-3">
-								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
-									<polyline points="16 18 22 12 16 6" />
-									<polyline points="8 6 2 12 8 18" />
-								</svg>
-							</div>
-							<h3 className="text-[14px] font-semibold text-foreground mb-1.5">CLI + MCP in one package</h3>
-							<p className="text-[12px] text-muted leading-relaxed">
-								Use from the terminal or let your AI agent invoke tools directly via the Model Context Protocol.
-							</p>
-						</div>
-					</div>
-				</div>
-			</section>
-
-			{/* ═══ SECURITY SCAN ═══ */}
-			<section className="py-20 md:py-28 border-t border-border">
-				<div className="max-w-5xl mx-auto px-6">
-					<div className="reveal text-center mb-14 md:mb-20">
-						<p className="text-[11px] font-mono tracking-[0.2em] uppercase text-muted mb-3">
-							Security
-						</p>
-						<h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
-							Scan before you install
-						</h2>
-						<p className="mt-4 text-[15px] text-muted max-w-lg mx-auto leading-relaxed">
-							Skills run on your machine. Use your own AI coding tool to analyze
-							them for threats. No server cost, full transparency.
-						</p>
-					</div>
-
-					{/* Terminal mockup */}
-					<div className="reveal max-w-2xl mx-auto mb-14">
-						<div className="bg-card-bg border border-card-border rounded-xl overflow-hidden">
-							{/* Terminal header */}
-							<div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-								<div className="flex gap-1.5">
-									<div className="w-2.5 h-2.5 rounded-full bg-muted/20" />
-									<div className="w-2.5 h-2.5 rounded-full bg-muted/20" />
-									<div className="w-2.5 h-2.5 rounded-full bg-muted/20" />
-								</div>
-								<span className="text-[11px] font-mono text-muted/40 ml-2">Terminal</span>
-							</div>
-							{/* Terminal body */}
-							<div className="p-5 font-mono text-[12px] leading-6 space-y-1">
-								<p className="text-muted">$ skillsgate scan @vercel/v0</p>
-								<p className="text-muted/60 mt-3">◆ Select a coding agent to run the scan:</p>
-								<p className="text-foreground">● Claude Code <span className="text-muted/40">(recommended - read-only mode)</span></p>
-								<p className="text-muted/40">○ Codex CLI</p>
-								<p className="text-muted/40">○ Goose</p>
-								<p className="text-muted/60 mt-3">ℹ Using Claude Code's default model.</p>
-								<p className="text-muted/60">◇ Scanning with Claude Code...</p>
-								<p className="text-muted/60 mt-3">Risk: <span className="text-green-500 font-semibold">CLEAN</span></p>
-								<p className="text-muted/50 mt-1">No security issues found.</p>
-								<p className="text-muted/60 mt-3">◆ Share your scan results with the SkillsGate community?</p>
-								<p className="text-foreground">● Yes, share</p>
-								<p className="text-muted/60 mt-1">✔ Scan submitted to SkillsGate community.</p>
-							</div>
-						</div>
-					</div>
-
-					{/* Three feature pills */}
-					<div className="reveal grid grid-cols-1 md:grid-cols-3 gap-4">
-						<div className="bg-card-bg border border-card-border rounded-xl p-6 text-center">
-							<div className="flex justify-center mb-3">
-								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
-									<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-								</svg>
-							</div>
-							<h3 className="text-[14px] font-semibold text-foreground mb-1.5">8 threat categories</h3>
-							<p className="text-[12px] text-muted leading-relaxed">
-								Prompt injection, data exfiltration, credential harvesting, malicious commands, and more.
-							</p>
-						</div>
-						<div className="bg-card-bg border border-card-border rounded-xl p-6 text-center">
-							<div className="flex justify-center mb-3">
-								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
-									<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-									<circle cx="9" cy="7" r="4" />
-									<path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-									<path d="M16 3.13a4 4 0 0 1 0 7.75" />
-								</svg>
-							</div>
-							<h3 className="text-[14px] font-semibold text-foreground mb-1.5">Crowdsourced trust</h3>
-							<p className="text-[12px] text-muted leading-relaxed">
-								Share scan results with the community. See what others found before you install.
-							</p>
-						</div>
-						<div className="bg-card-bg border border-card-border rounded-xl p-6 text-center">
-							<div className="flex justify-center mb-3">
-								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
-									<rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-									<line x1="8" y1="21" x2="16" y2="21" />
-									<line x1="12" y1="17" x2="12" y2="21" />
-								</svg>
-							</div>
-							<h3 className="text-[14px] font-semibold text-foreground mb-1.5">5 coding agents supported</h3>
-							<p className="text-[12px] text-muted leading-relaxed">
-								Claude Code, Codex CLI, OpenCode, Goose, and Aider. Use whichever you have installed.
-							</p>
-						</div>
 					</div>
 				</div>
 			</section>
@@ -867,24 +705,24 @@ export default function Home() {
 							Get started
 						</p>
 						<h2 className="text-2xl md:text-[2.5rem] font-semibold tracking-tight text-foreground leading-tight">
-							Extend your AI agent
+							Take control of your
 							<br className="hidden sm:block" />
-							starting today
+							agent skills
 						</h2>
 						<p className="mt-5 text-[15px] text-muted max-w-md mx-auto leading-relaxed">
-							Search thousands of skills, install in seconds, and make your AI
-							coding assistant dramatically more capable.
+							Browse 91,000+ skills, install to the agents you choose, and edit
+							anything with a proper markdown editor.
 						</p>
 
 						<div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
 							<a
-								href="#"
-								className="inline-flex items-center justify-center px-6 py-3 text-[14px] font-medium rounded-lg bg-foreground text-background hover:opacity-90 transition-opacity"
+								href="https://github.com/skillsgate/skillsgate/releases/latest"
+								className="inline-flex items-center justify-center px-6 py-3 text-[14px] font-medium rounded-lg bg-foreground text-background hover:opacity-90 transition-opacity no-underline"
 							>
-								Get started
+								Download Desktop App
 							</a>
 							<code className="text-[12px] font-mono text-muted bg-code-bg px-4 py-3 rounded-lg border border-border">
-								$ npm install -g skillsgate
+								npx skillsgate
 							</code>
 						</div>
 					</div>
@@ -911,7 +749,7 @@ export default function Home() {
 							</span>
 							<div className="space-y-2.5">
 								<a href="https://github.com/skillsgate/skillsgate" target="_blank" rel="noopener noreferrer" className="block text-[13px] text-muted hover:text-foreground transition-colors">GitHub</a>
-								<a href="/docs" className="block text-[13px] text-muted hover:text-foreground transition-colors">Docs</a>
+								<a href="/blog" className="block text-[13px] text-muted hover:text-foreground transition-colors">Blog</a>
 							</div>
 						</div>
 					</div>

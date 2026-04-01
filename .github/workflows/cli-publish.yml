@@ -4,10 +4,19 @@ on:
   push:
     tags:
       - "cli-v*"
+  workflow_run:
+    workflows: ["Publish TUI to npm"]
+    types:
+      - completed
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # Only run if triggered by tag push, or if TUI workflow succeeded and there
+    # is a matching cli tag for the same version (e.g. tui-v1.0.0 -> cli-v1.0.0).
+    if: >
+      github.event_name == 'push' ||
+      (github.event.workflow_run.conclusion == 'success')
     permissions:
       contents: read
       id-token: write
@@ -18,6 +27,20 @@ jobs:
         with:
           node-version: 22
           registry-url: "https://registry.npmjs.org"
+
+      - name: Wait for TUI packages to be available on npm
+        run: |
+          CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
+          echo "Waiting for @skillsgate/tui-darwin-arm64@${CLI_VERSION} on npm..."
+          for i in $(seq 1 30); do
+            if npm view "@skillsgate/tui-darwin-arm64@${CLI_VERSION}" version 2>/dev/null; then
+              echo "TUI packages available."
+              exit 0
+            fi
+            echo "Attempt $i/30 -- not yet available, waiting 10s..."
+            sleep 10
+          done
+          echo "TUI packages not found after 5 minutes. Publishing CLI anyway (optionalDependencies will resolve on next install)."
 
       - name: Install CLI dependencies only
         run: npm install --workspace=skillsgate
