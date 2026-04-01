@@ -15,12 +15,6 @@
     "@opentui/react": "0.1.90",
     "gray-matter": "4.0.3"
   },
-  "optionalDependencies": {
-    "@skillsgate/tui-darwin-arm64": "0.1.12",
-    "@skillsgate/tui-darwin-x64": "0.1.12",
-    "@skillsgate/tui-linux-x64": "0.1.12",
-    "@skillsgate/tui-win32-x64": "0.1.12"
-  },
   "peerDependencies": {
     "react": "19.1.5"
   },

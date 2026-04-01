@@ -48,12 +48,6 @@
     "gray-matter": "4.0.3",
     "simple-git": "3.32.3"
   },
-  "optionalDependencies": {
-    "@skillsgate/tui-darwin-arm64": "0.1.12",
-    "@skillsgate/tui-darwin-x64": "0.1.12",
-    "@skillsgate/tui-linux-x64": "0.1.12",
-    "@skillsgate/tui-win32-x64": "0.1.12"
-  },
   "devDependencies": {
     "@types/node": "22.19.11",
     "tsup": "8.5.1",
