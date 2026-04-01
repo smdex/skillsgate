@@ -105,6 +105,9 @@ declare global {
       agents: string[],
       scope: string,
     ) => Promise<InstallResult[]>
+    installSkillViaCli: (
+      source: string,
+    ) => Promise<{ success: boolean; output: string; error?: string }>
     createSkill: (data: {
       name: string
       description?: string

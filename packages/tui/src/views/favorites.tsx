@@ -1,11 +1,10 @@
 import { useState, useMemo, useEffect } from "react"
 import { useKeyboard } from "@opentui/react"
 import { useStore, useDispatch } from "../store/context.js"
-import { useFavorites } from "../data/use-favorites.js"
+import { useFavorites, type FavoriteSkill } from "../data/use-favorites.js"
 import { useSkillActions } from "../data/use-skill-actions.js"
 import { ConfirmDialog } from "../components/confirm-dialog.js"
 import { colors } from "../utils/colors.js"
-import type { CatalogSkill } from "../data/api-client.js"
 import type { EnrichedSkill } from "../store/types.js"
 
 /**
@@ -21,8 +20,8 @@ export function FavoritesView() {
   const { favorites, loading, error, toggle } = useFavorites()
   const { installSkill } = useSkillActions()
   const [selectedIndex, setSelectedIndex] = useState(0)
-  const [installTarget, setInstallTarget] = useState<CatalogSkill | null>(null)
-  const [previewSkill, setPreviewSkill] = useState<CatalogSkill | null>(null)
+  const [installTarget, setInstallTarget] = useState<FavoriteSkill | null>(null)
+  const [previewSkill, setPreviewSkill] = useState<FavoriteSkill | null>(null)
 
   // Build a set of installed skill names for the "installed" badge
   const installedNames = useMemo(() => {
@@ -244,7 +243,7 @@ export function FavoritesView() {
 // ---------- Inline Detail Panel ----------
 
 interface FavoriteDetailPanelProps {
-  skill: CatalogSkill
+  skill: FavoriteSkill
   isInstalled: boolean
 }
 
@@ -329,7 +328,7 @@ function FavoriteDetailPanel({ skill, isInstalled }: FavoriteDetailPanelProps) {
 // ---------- Helpers ----------
 
 function catalogSkillToEnriched(
-  skill: CatalogSkill,
+  skill: FavoriteSkill,
   installedNames: Set<string>
 ): EnrichedSkill {
   return {

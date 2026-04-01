@@ -1,12 +1,26 @@
 import { useState, useEffect, useCallback } from "react"
 import { useStore, useDispatch } from "../store/context.js"
-import type { CatalogSkill } from "./api-client.js"
+import { SKILLSGATE_API_BASE } from "./api-client.js"
 
-const API_BASE = process.env.SKILLSGATE_SEARCH_API_URL ?? "https://api.skillsgate.ai"
-
-interface FavoriteSkill extends CatalogSkill {
+/**
+ * Shape returned by the favorites API endpoint.
+ */
+export interface FavoriteSkill {
+  id: string
+  name: string
+  description: string
+  summary?: string
+  categories: string[]
+  capabilities?: string[]
+  keywords?: string[]
+  githubUrl?: string
+  githubStars?: number | null
+  installCommand?: string | null
+  slug?: string
   favoriteId?: string
 }
+
+const API_BASE = SKILLSGATE_API_BASE
 
 interface UseFavoritesResult {
   favorites: FavoriteSkill[]

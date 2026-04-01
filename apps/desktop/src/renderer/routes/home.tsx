@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react"
 import { marked } from "marked"
 import { electronAPI } from "../lib/electron-api"
+import { SkillEditor } from "../components/skill-editor"
 
 // Agent color mapping for dot badges
 const AGENT_COLORS: Record<string, string> = {
@@ -934,12 +935,10 @@ function RightPanel({ skill, content, contentLoading, collections, onContentSave
           {/* Content: View or Edit mode */}
           {editMode ? (
             <div className="flex flex-col gap-3">
-              <textarea
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                className="bg-background border border-border rounded-lg font-mono text-[13px] p-4 w-full resize-none text-foreground focus:outline-none focus:border-accent transition-colors"
-                style={{ minHeight: "400px" }}
-                spellCheck={false}
+              <SkillEditor
+                content={editContent}
+                onChange={setEditContent}
+                onSave={handleSave}
               />
               <div className="flex items-center gap-2 justify-end">
                 {saveStatus === "saved" && (

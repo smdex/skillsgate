@@ -1,25 +1,42 @@
 #!/usr/bin/env node
+// Ensures the correct platform binary is installed.
+// npm may skip optionalDependencies for global installs (npm v11+/Node v24+).
+import { execSync } from "node:child_process";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import fs from "node:fs";
+import os from "node:os";
 
-// Postinstall script for skillsgate
-// Auto-detects AI tools and offers to configure MCP
+const require = createRequire(import.meta.url);
+const thisDir = path.dirname(fileURLToPath(import.meta.url));
 
-import { execFileSync } from "node:child_process";
+const platformMap = {
+  darwin: { arm64: "tui-darwin-arm64", x64: "tui-darwin-x64" },
+  linux: { arm64: "tui-linux-arm64", x64: "tui-linux-x64" },
+  win32: { x64: "tui-win32-x64" },
+};
 
-// Skip in CI or non-interactive environments
-const CI_VARS = ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "CIRCLECI", "JENKINS_URL", "BUILDKITE"];
-if (CI_VARS.some((v) => process.env[v])) {
-  process.exit(0);
-}
+const pkg = platformMap[os.platform()]?.[os.arch()];
+if (!pkg) process.exit(0);
 
-if (!process.stdout.isTTY) {
-  process.exit(0);
-}
+// Check if already available as a sibling (optionalDeps worked)
+const siblingPath = path.join(thisDir, "..", "..", "..", `@skillsgate/${pkg}`);
+if (fs.existsSync(siblingPath)) process.exit(0);
 
-// Run `skillsgate setup` which handles detection and prompting
+// Also check nested node_modules
 try {
-  execFileSync("node", [new URL("cli.mjs", import.meta.url).pathname, "setup"], {
+  require.resolve(`@skillsgate/${pkg}/package.json`);
+  process.exit(0);
+} catch {}
+
+// Not found -- install it explicitly
+const version = require("../package.json").version;
+try {
+  execSync(`npm install -g @skillsgate/${pkg}@${version} --no-save`, {
     stdio: "inherit",
+    timeout: 30000,
   });
 } catch {
-  // Don't fail the install if setup fails
+  console.warn(`Warning: could not install @skillsgate/${pkg}. Run manually: npm install -g @skillsgate/${pkg}`);
 }

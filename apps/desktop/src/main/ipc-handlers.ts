@@ -1097,6 +1097,37 @@ export function registerIpcHandlers(): void {
     },
   )
 
+  // Install a skill using the `npx skills add` CLI command
+  ipcMain.handle(
+    "skills:install-via-cli",
+    async (
+      _event,
+      source: string,
+    ): Promise<{ success: boolean; output: string; error?: string }> => {
+      return new Promise((resolve) => {
+        execFile(
+          "npx",
+          ["skills", "add", source, "--all", "-y"],
+          { timeout: 120_000, shell: true },
+          (error, stdout, stderr) => {
+            if (error) {
+              resolve({
+                success: false,
+                output: stdout || "",
+                error: stderr || error.message,
+              })
+            } else {
+              resolve({
+                success: true,
+                output: stdout || "",
+              })
+            }
+          },
+        )
+      })
+    },
+  )
+
   ipcMain.handle(
     "skills:create",
     async (

@@ -25,7 +25,7 @@ const SHORTCUTS_RIGHT: ShortcutEntry[] = [
   { key: "i", description: "Install selected skill" },
   { key: "d", description: "Remove selected skill" },
   { key: "x", description: "Unfavorite (favorites view)" },
-  { key: "m", description: "Toggle keyword/AI search" },
+  { key: "", description: "" },
   { key: "?", description: "Toggle this help" },
   { key: "Ctrl+Q", description: "Quit" },
   { key: "", description: "" },

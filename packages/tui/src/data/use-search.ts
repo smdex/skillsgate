@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react"
-import { fetchCatalog, searchSkills, type CatalogSkill, type SearchMode } from "./api-client.js"
+import { searchSkills, type CatalogSkill } from "./api-client.js"
 
 const DEBOUNCE_MS = 300
 const PAGE_SIZE = 20
@@ -11,35 +11,28 @@ interface UseSearchResult {
   total: number
   hasMore: boolean
   loadMore: () => void
-  remainingSearches: number | null
 }
 
 /**
  * Hook that manages search state with debounce and pagination.
- * - When query is empty, loads the catalog with pagination
+ * - When query is empty, loads popular skills
  * - When query is provided, searches after 300ms debounce
- * - Supports keyword and semantic search modes
  */
-export function useSearch(
-  query: string,
-  mode: SearchMode,
-  token?: string | null
-): UseSearchResult {
+export function useSearch(query: string): UseSearchResult {
   const [results, setResults] = useState<CatalogSkill[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
-  const [remainingSearches, setRemainingSearches] = useState<number | null>(null)
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Reset pagination when query or mode changes
+  // Reset pagination when query changes
   useEffect(() => {
     setResults([])
     setOffset(0)
     setError(null)
-  }, [query, mode])
+  }, [query])
 
   useEffect(() => {
     if (timerRef.current) {
@@ -52,19 +45,10 @@ export function useSearch(
       setError(null)
 
       try {
-        if (query.trim()) {
-          const data = await searchSkills(query, mode, token)
-          setResults(data.skills)
-          setTotal(data.total)
-          if (data.remainingSearches !== undefined) {
-            setRemainingSearches(data.remainingSearches)
-          }
-        } else {
-          const data = await fetchCatalog(PAGE_SIZE, 0)
-          setResults(data.skills)
-          setTotal(data.total)
-          setOffset(PAGE_SIZE)
-        }
+        const data = await searchSkills(query, PAGE_SIZE)
+        setResults(data.skills)
+        setTotal(data.total)
+        setOffset(PAGE_SIZE)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         if (!msg.includes("abort")) {
@@ -86,15 +70,15 @@ export function useSearch(
         clearTimeout(timerRef.current)
       }
     }
-  }, [query, mode, token])
+  }, [query])
 
   const loadMore = useCallback(async () => {
-    if (query.trim() || loading) return
+    if (loading) return
     if (results.length >= total) return
 
     setLoading(true)
     try {
-      const data = await fetchCatalog(PAGE_SIZE, offset)
+      const data = await searchSkills(query, PAGE_SIZE)
       setResults((prev) => [...prev, ...data.skills])
       setTotal(data.total)
       setOffset((prev) => prev + PAGE_SIZE)
@@ -113,6 +97,5 @@ export function useSearch(
     total,
     hasMore: results.length < total,
     loadMore,
-    remainingSearches,
   }
 }

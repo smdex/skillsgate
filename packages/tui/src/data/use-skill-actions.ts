@@ -1,11 +1,13 @@
 import { useCallback } from "react"
+import { exec as execCb } from "node:child_process"
+import { promisify } from "node:util"
 import { useStore, useDispatch } from "../store/context.js"
 import { useDb } from "../db/context.js"
-import type { EnrichedSkill } from "../store/types.js"
+import type { EnrichedSkill, Action } from "../store/types.js"
 
 // CLI core imports -- these share the same Bun runtime
 import { parseSource } from "../../../cli/src/core/source-parser.js"
-import { cloneRepo, cleanupTempDir, fetchTreeSha } from "../../../cli/src/core/git.js"
+import { cleanupTempDir, fetchTreeSha } from "../../../cli/src/core/git.js"
 import { discoverSkills } from "../../../cli/src/core/skill-discovery.js"
 import {
   installSkillForAgent,
@@ -16,12 +18,11 @@ import {
 import {
   addSkillToLock,
   removeSkillFromLock,
-  readSkillLock,
 } from "../../../cli/src/core/skill-lock.js"
 import { agents, detectInstalledAgents } from "../../../cli/src/core/agents.js"
 import { downloadSkill } from "../../../cli/src/core/skillsgate-client.js"
 import { getToken } from "../../../cli/src/utils/auth-store.js"
-import type { Skill, AgentConfig, ParsedSource } from "../../../cli/src/types.js"
+import type { Skill, AgentConfig } from "../../../cli/src/types.js"
 
 interface UseSkillActionsResult {
   installSkill: (skill: EnrichedSkill) => Promise<void>
@@ -40,7 +41,9 @@ export function useSkillActions(): UseSkillActionsResult {
   const { settings } = useDb()
 
   /**
-   * Install a skill from its source (GitHub URL, SkillsGate slug, or install command).
+   * Install a skill from its source.
+   * For public skills (with a source in owner/repo format), runs `npx skills add`.
+   * For private skills, uses the existing download flow.
    */
   const installSkill = useCallback(async (skill: EnrichedSkill) => {
     dispatch({
@@ -61,7 +64,16 @@ export function useSkillActions(): UseSkillActionsResult {
 
       const source = parseSource(sourceStr)
 
-      // Detect installed agents to install to
+      // Public skills (owner/repo format): use `npx skills add`
+      if (source.type === "github" || isOwnerRepoFormat(sourceStr)) {
+        const repo = source.type === "github"
+          ? `${source.owner}/${source.repo}`
+          : sourceStr
+        await runSkillsAdd(repo, dispatch)
+        return
+      }
+
+      // Private skills: use the existing download flow
       const installedAgents = await detectInstalledAgents()
       if (installedAgents.length === 0) {
         dispatch({
@@ -88,19 +100,16 @@ export function useSkillActions(): UseSkillActionsResult {
 
       let tmpDir: string
       if (source.type === "skillsgate") {
-        // Download from SkillsGate API
+        // Download from private API
         const token = await getToken()
         tmpDir = await downloadSkill(source.username!, source.slug!, token)
-      } else if (source.type === "github") {
-        // Clone from GitHub
-        tmpDir = await cloneRepo(source)
       } else {
         // Local path -- use directly
         tmpDir = source.localPath!
       }
 
       try {
-        // Discover skills in the cloned/downloaded directory
+        // Discover skills in the downloaded directory
         const skills = await discoverSkills(tmpDir, source.subpath)
 
         if (skills.length === 0) {
@@ -320,9 +329,49 @@ export function useSkillActions(): UseSkillActionsResult {
 
 // ---------- Helpers ----------
 
+const execAsync = promisify(execCb)
+
+/**
+ * Checks if a string matches the owner/repo format (e.g. "vercel/skills").
+ */
+function isOwnerRepoFormat(str: string): boolean {
+  return /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(str)
+}
+
+/**
+ * Runs `npx skills add <source> --all -y` as a child process to install
+ * all skills from a public repository.
+ */
+async function runSkillsAdd(
+  source: string,
+  dispatch: (action: Action) => void
+): Promise<void> {
+  try {
+    await execAsync(
+      `npx skills add ${source} --all -y`,
+      { timeout: 60_000 }
+    )
+
+    dispatch({ type: "REFRESH_SKILLS" })
+    dispatch({
+      type: "SHOW_NOTIFICATION",
+      notification: {
+        type: "success",
+        message: `Installed skills from ${source}`,
+      },
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    dispatch({
+      type: "SHOW_NOTIFICATION",
+      notification: { type: "error", message: `Install failed: ${msg}` },
+    })
+  }
+}
+
 /**
  * Resolves the source string for a skill from its metadata.
- * Checks: lock.source, metadata.githubUrl, metadata.installCommand
+ * Checks: lock.source, metadata.source, metadata.githubUrl, metadata.installCommand
  */
 function resolveSource(skill: EnrichedSkill): string | null {
   // From lock file entry
@@ -330,17 +379,20 @@ function resolveSource(skill: EnrichedSkill): string | null {
     return skill.lock.source
   }
 
-  // From metadata (catalog skills)
+  // From metadata (catalog skills -- owner/repo format)
   const meta = skill.metadata
+  if (meta?.source && typeof meta.source === "string") {
+    return meta.source
+  }
+
   if (meta?.githubUrl && typeof meta.githubUrl === "string") {
     return meta.githubUrl
   }
 
-  // From install command (e.g. "skillsgate add @user/slug")
+  // From install command (e.g. "skills add <source>")
   if (meta?.installCommand && typeof meta.installCommand === "string") {
     const cmd = meta.installCommand as string
-    // Extract the source from "skillsgate add <source>" or "skillsgate install <source>"
-    const match = cmd.match(/skillsgate\s+(?:add|install)\s+(.+)/)
+    const match = cmd.match(/skills?\s+(?:add|install)\s+(.+)/)
     if (match) {
       return match[1].trim()
     }

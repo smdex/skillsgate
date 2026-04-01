@@ -4,30 +4,21 @@ import { useStore, useDispatch } from "../store/context.js"
 import { useSearch } from "../data/use-search.js"
 import { useSkillActions } from "../data/use-skill-actions.js"
 import { ConfirmDialog } from "../components/confirm-dialog.js"
-import type { CatalogSkill, SearchMode } from "../data/api-client.js"
+import type { CatalogSkill } from "../data/api-client.js"
 import { colors } from "../utils/colors.js"
 
 /**
- * Discover view: two-column layout with search mode toggle.
- * LEFT  - Search input + mode toggle + results list (40%)
+ * Discover view: two-column layout with search results.
+ * LEFT  - Search input + results list (40%)
  * RIGHT - Selected result detail (flexGrow)
- *
- * Search modes:
- * - Keyword (public, no auth): ILIKE pattern matching, unlimited
- * - Semantic (auth required): AI-powered vector search, 30/day limit
- * Toggle with 'm' key.
  */
 export function DiscoverView() {
   const state = useStore()
   const dispatch = useDispatch()
   const [query, setQuery] = useState("")
-  const [searchMode, setSearchMode] = useState<SearchMode>("keyword")
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [installTarget, setInstallTarget] = useState<CatalogSkill | null>(null)
   const [previewSkill, setPreviewSkill] = useState<CatalogSkill | null>(null)
-
-  const token = state.auth?.token ?? null
-  const isAuthenticated = !!state.auth
 
   // Auto-focus search input when Discover view mounts
   useEffect(() => {
@@ -36,8 +27,8 @@ export function DiscoverView() {
     }
   }, [state.activeView])
 
-  const { results, loading, error, total, hasMore, loadMore, remainingSearches } =
-    useSearch(query, searchMode, token)
+  const { results, loading, error, total, hasMore, loadMore } =
+    useSearch(query)
   const { installSkill } = useSkillActions()
 
   // Update preview when selection changes
@@ -94,24 +85,6 @@ export function DiscoverView() {
       setInstallTarget(results[selectedIndex])
       return
     }
-
-    // m to toggle search mode
-    if (key.name === "m") {
-      if (searchMode === "keyword") {
-        if (!isAuthenticated) {
-          dispatch({
-            type: "SHOW_NOTIFICATION",
-            notification: { type: "info", message: "Sign in to use AI search (press l)" },
-          })
-          return
-        }
-        setSearchMode("semantic")
-      } else {
-        setSearchMode("keyword")
-      }
-      setSelectedIndex(0)
-      return
-    }
   })
 
   // Confirm dialog for install
@@ -142,17 +115,11 @@ export function DiscoverView() {
           paddingLeft: 1,
           paddingRight: 1,
         }}
-        title={state.focusedPane === "search"
-          ? (searchMode === "semantic" ? "AI Search" : "Keyword Search")
-          : "/ to search"}
+        title={state.focusedPane === "search" ? "Search" : "/ to search"}
       >
         {state.focusedPane === "search" ? (
           <input
-            placeholder={
-              searchMode === "semantic"
-                ? 'AI search -- try "audit website performance" (Enter to search)'
-                : "Search by keyword... (Enter to search)"
-            }
+            placeholder="Search skills... (Enter to search)"
             focused={state.activeView === "discover" && !state.showHelp}
             onSubmit={((value: string) => {
               setQuery(value)
@@ -164,7 +131,7 @@ export function DiscoverView() {
         )}
       </box>
 
-      {/* Status line: mode toggle + results + remaining */}
+      {/* Status line */}
       <box
         style={{
           height: 1,
@@ -174,37 +141,16 @@ export function DiscoverView() {
           flexDirection: "row",
         }}
       >
-        {/* Mode toggle: show both options, highlight active */}
-        <text fg={searchMode === "keyword" ? colors.primary : colors.textDim}>
-          {searchMode === "keyword" ? "[Keyword]" : " Keyword "}
-        </text>
-        <text fg={colors.textDim}>{" | "}</text>
-        <text fg={searchMode === "semantic" ? colors.warning : colors.textDim}>
-          {searchMode === "semantic" ? "[AI Search]" : (isAuthenticated ? " AI Search " : " AI Search (login) ")}
-        </text>
-        <text fg={colors.textDim}>{"  m=switch  "}</text>
-
         {/* Results info */}
         <text fg={colors.textDim}>
           {loading
             ? "Loading..."
             : error
-              ? error === "AUTH_EXPIRED"
-                ? "Session expired -- press l to re-login"
-                : error === "RATE_LIMIT"
-                  ? "Daily limit reached -- switch to keyword (m)"
-                  : `Error: ${error}`
+              ? `Error: ${error}`
               : query.trim()
                 ? `${results.length} result${results.length !== 1 ? "s" : ""}`
                 : `${results.length}/${total} skills`}
         </text>
-
-        {/* Remaining searches (semantic only) */}
-        {searchMode === "semantic" && remainingSearches !== null ? (
-          <text fg={remainingSearches <= 5 ? colors.error : colors.textDim}>
-            {`  ${remainingSearches} left today`}
-          </text>
-        ) : null}
       </box>
 
       {/* Two-column content: results list | detail */}
@@ -250,7 +196,7 @@ export function DiscoverView() {
             >
               {results.map((skill, i) => (
                 <box
-                  key={skill.id ?? `${skill.slug}-${i}`}
+                  key={skill.id ?? `${skill.skillId}-${i}`}
                   style={{
                     width: "100%",
                     paddingLeft: 1,
@@ -297,11 +243,6 @@ interface DiscoverDetailPanelProps {
 }
 
 function DiscoverDetailPanel({ skill }: DiscoverDetailPanelProps) {
-  const description = skill.summary || skill.description || ""
-  const categories = skill.categories?.join(", ") ?? ""
-  const capabilities = skill.capabilities?.join(", ") ?? ""
-  const keywords = skill.keywords?.join(", ") ?? ""
-
   return (
     <scrollbox
       focused={false}
@@ -325,58 +266,25 @@ function DiscoverDetailPanel({ skill }: DiscoverDetailPanelProps) {
           <strong>{skill.name}</strong>
         </text>
 
-        {/* Description */}
-        <text fg={colors.text}>{description}</text>
-        <text>{" "}</text>
+        {/* Skill ID */}
+        <box style={{ flexDirection: "row", height: 1 }}>
+          <text fg={colors.textDim}>ID: </text>
+          <text fg={colors.text}>{skill.skillId}</text>
+        </box>
 
-        {/* Categories */}
-        {categories ? (
+        {/* Source (owner/repo) */}
+        {skill.source ? (
           <box style={{ flexDirection: "row", height: 1 }}>
-            <text fg={colors.textDim}>Categories: </text>
-            <text fg={colors.secondary}>{categories}</text>
+            <text fg={colors.textDim}>Source: </text>
+            <text fg={colors.primary}>{skill.source}</text>
           </box>
         ) : null}
 
-        {/* Capabilities */}
-        {capabilities ? (
-          <box style={{ flexDirection: "row", height: 1 }}>
-            <text fg={colors.textDim}>Capabilities: </text>
-            <text fg={colors.secondary}>{capabilities}</text>
-          </box>
-        ) : null}
-
-        {/* Keywords */}
-        {keywords ? (
-          <box style={{ flexDirection: "row", height: 1 }}>
-            <text fg={colors.textDim}>Keywords: </text>
-            <text fg={colors.secondary}>{keywords}</text>
-          </box>
-        ) : null}
-
-        {/* Score (semantic search only) */}
-        {skill.score ? (
-          <box style={{ flexDirection: "row", height: 1 }}>
-            <text fg={colors.textDim}>Score: </text>
-            <text fg={colors.success}>{skill.score.toFixed(3)}</text>
-          </box>
-        ) : null}
-
-        {/* GitHub URL */}
-        {skill.githubUrl ? (
-          <box style={{ flexDirection: "row", height: 1 }}>
-            <text fg={colors.textDim}>GitHub: </text>
-            <text fg={colors.primary}>{skill.githubUrl}</text>
-          </box>
-        ) : null}
-
-        {/* Install command */}
-        {skill.installCommand ? (
-          <>
-            <text>{" "}</text>
-            <text fg={colors.textDim}>Install:</text>
-            <text fg={colors.success}>  {skill.installCommand}</text>
-          </>
-        ) : null}
+        {/* Installs */}
+        <box style={{ flexDirection: "row", height: 1 }}>
+          <text fg={colors.textDim}>Installs: </text>
+          <text fg={colors.success}>{skill.installs.toLocaleString()}</text>
+        </box>
 
         <text>{" "}</text>
         <text fg={colors.textDim}>v=full detail  i=install  Tab=switch pane</text>
@@ -392,9 +300,11 @@ function DiscoverDetailPanel({ skill }: DiscoverDetailPanelProps) {
  * Since catalog skills don't have a local file, we provide a placeholder.
  */
 function catalogSkillToEnriched(skill: CatalogSkill): import("../store/types.js").EnrichedSkill {
+  const githubUrl = skill.source ? `https://github.com/${skill.source}` : undefined
+
   return {
     name: skill.name,
-    description: skill.summary || skill.description || "",
+    description: "",
     filePath: "", // No local file for catalog items
     canonicalPath: "",
     agents: [],
@@ -403,18 +313,15 @@ function catalogSkillToEnriched(skill: CatalogSkill): import("../store/types.js"
     hasSupportingFiles: false,
     supportingFiles: [],
     metadata: {
-      categories: skill.categories,
-      capabilities: skill.capabilities,
-      keywords: skill.keywords,
-      githubUrl: skill.githubUrl,
-      installCommand: skill.installCommand,
-      urlPath: skill.urlPath,
+      source: skill.source,
+      skillId: skill.skillId,
+      installs: skill.installs,
     },
-    lock: skill.githubUrl
+    lock: skill.source
       ? {
-          source: skill.githubUrl,
+          source: skill.source,
           sourceType: "github" as const,
-          originalUrl: skill.githubUrl,
+          originalUrl: githubUrl ?? "",
           skillFolderHash: "",
           installedAt: "",
           updatedAt: "",

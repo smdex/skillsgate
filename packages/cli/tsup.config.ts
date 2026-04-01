@@ -1,7 +1,7 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/cli.ts", "src/mcp/server.ts"],
+  entry: ["src/cli.ts"],
   format: ["esm"],
   outDir: "dist",
   target: "node18",
@@ -11,7 +11,14 @@ export default defineConfig({
   dts: true,
   clean: true,
   banner: {},
-  external: ["@napi-rs/keyring"],
+  external: [
+    "@napi-rs/keyring",
+    "@clack/prompts",
+    "@modelcontextprotocol/sdk",
+    "picocolors",
+    "open",
+    "zod",
+  ],
   noExternal: [],
   shims: true,
 });

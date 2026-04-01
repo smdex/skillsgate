@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   listInstalled: () => ipcRenderer.invoke("skills:list-installed"),
   installSkill: (source: string, agents: string[], scope: string) =>
     ipcRenderer.invoke("skills:install", source, agents, scope),
+  installSkillViaCli: (source: string) =>
+    ipcRenderer.invoke("skills:install-via-cli", source),
   createSkill: (data: {
     name: string
     description?: string

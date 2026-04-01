@@ -1,82 +1,97 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { marked } from "marked"
 import { electronAPI } from "../lib/electron-api"
-import { useAuthStore } from "../lib/auth-store"
-
-type SearchMode = "keyword" | "semantic"
 
 // ---------------------------------------------------------------------------
 // API constants
 // ---------------------------------------------------------------------------
 
-const API_BASE = "https://api.skillsgate.ai"
+const SKILLS_SH_API = "https://skills.sh/api"
 
 // ---------------------------------------------------------------------------
-// Types (mirrored from @skillsgate/ui for standalone usage)
+// Types matching the skills.sh response shape
 // ---------------------------------------------------------------------------
 
 interface CatalogSkill {
+  id: string
   skillId: string
-  slug: string
   name: string
-  description: string
-  summary: string
-  categories: string[]
-  capabilities: string[]
-  keywords: string[]
-  githubUrl: string
-  githubStars: number | null
-  installCommand: string | null
-  urlPath: string
+  installs: number
+  source: string
 }
 
-interface CatalogResponse {
+interface SkillsShSearchResponse {
   skills: CatalogSkill[]
-  meta: { total: number; limit: number; offset: number; hasMore: boolean }
+  count: number
 }
 
-interface KeywordSearchResponse {
-  skills: CatalogSkill[]
-  meta: { total: number; limit: number; offset: number; hasMore: boolean }
+// ---------------------------------------------------------------------------
+// Default branch cache (avoids repeated GitHub API calls per repo)
+// ---------------------------------------------------------------------------
+
+const defaultBranchCache = new Map<string, string>()
+
+async function getDefaultBranch(source: string): Promise<string> {
+  const cached = defaultBranchCache.get(source)
+  if (cached) return cached
+
+  try {
+    const res = await fetch(`https://api.github.com/repos/${source}`)
+    if (!res.ok) throw new Error(`GitHub API ${res.status}`)
+    const data = await res.json()
+    const branch = data.default_branch || "main"
+    defaultBranchCache.set(source, branch)
+    return branch
+  } catch {
+    // Fall back to "main" if the API call fails
+    return "main"
+  }
 }
 
-interface SemanticSearchResponse {
-  results: (CatalogSkill & { score: number })[]
-  meta: { query: string; total: number; limit: number; remainingSearches: number }
-}
+// ---------------------------------------------------------------------------
+// Fetch SKILL.md content from GitHub raw, trying multiple paths
+// ---------------------------------------------------------------------------
 
-interface SkillDetail {
-  skillId: string
-  slug: string
-  name: string
-  description: string
-  summary: string
-  categories: string[]
-  capabilities: string[]
-  keywords: string[]
-  githubUrl: string
-  githubRepo: string
-  githubStars: number | null
-  installCommand: string | null
-  urlPath: string
-  createdAt: string
-  updatedAt: string
-}
+async function fetchSkillContent(
+  source: string,
+  skillId: string,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  const branch = await getDefaultBranch(source)
+  const baseUrl = `https://raw.githubusercontent.com/${source}/${branch}`
 
-interface SkillDetailResponse {
-  skill: SkillDetail
-  content: string
+  const pathsToTry = [
+    `skills/${skillId}/SKILL.md`,
+    `skills/.curated/${skillId}/SKILL.md`,
+    `skills/.experimental/${skillId}/SKILL.md`,
+    `${skillId}/SKILL.md`,
+    `SKILL.md`,
+  ]
+
+  for (const p of pathsToTry) {
+    try {
+      const res = await fetch(`${baseUrl}/${p}`, { signal })
+      if (res.ok) {
+        return await res.text()
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return null
+      // Continue to next path
+    }
+  }
+
+  return null
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatStars(stars: number): string {
-  if (stars >= 1000) {
-    return `${(stars / 1000).toFixed(1).replace(/\.0$/, "")}k`
+function formatInstalls(installs: number): string {
+  if (installs >= 1000) {
+    return `${(installs / 1000).toFixed(1).replace(/\.0$/, "")}k`
   }
-  return String(stars)
+  return String(installs)
 }
 
 // Configure marked for synchronous rendering
@@ -127,20 +142,6 @@ function SearchIcon({ size = 16 }: { size?: number }) {
     >
       <circle cx="11" cy="11" r="8" />
       <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  )
-}
-
-function StarIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      className="text-amber-400/70"
-    >
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
     </svg>
   )
 }
@@ -224,6 +225,26 @@ function SpinnerIcon() {
   )
 }
 
+function InstallsIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="text-muted"
+    >
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Skill Card (catalog grid item)
 // ---------------------------------------------------------------------------
@@ -236,14 +257,13 @@ interface SkillCardProps {
 
 function SkillCard({ skill, onSelect, installedNames }: SkillCardProps) {
   const isInstalled = installedNames.has(skill.name.toLowerCase())
-  const displayText = skill.summary || skill.description
 
   return (
     <button
       onClick={() => onSelect(skill)}
       className="text-left w-full p-4 rounded-lg border border-border bg-surface hover:border-accent/30 hover:bg-surface-hover transition-all duration-200 group"
     >
-      {/* Name + stars row */}
+      {/* Name + installs row */}
       <div className="flex items-center gap-2 mb-1.5">
         <h3 className="text-[13px] font-semibold text-foreground truncate">
           {skill.name}
@@ -253,39 +273,18 @@ function SkillCard({ skill, onSelect, installedNames }: SkillCardProps) {
             installed
           </span>
         )}
-        {skill.githubStars != null && skill.githubStars > 0 && (
+        {skill.installs > 0 && (
           <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-mono text-muted ml-auto">
-            <StarIcon />
-            {formatStars(skill.githubStars)}
+            <InstallsIcon />
+            {formatInstalls(skill.installs)}
           </span>
         )}
       </div>
 
-      {/* Description */}
-      {displayText && (
-        <p className="text-[12px] text-muted leading-relaxed line-clamp-2 mb-2.5">
-          {displayText}
-        </p>
-      )}
-
-      {/* Categories */}
-      {skill.categories.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {skill.categories.slice(0, 3).map((cat) => (
-            <span
-              key={cat}
-              className="text-[9px] font-mono tracking-wider uppercase text-muted bg-surface-hover px-1.5 py-0.5 rounded"
-            >
-              {cat}
-            </span>
-          ))}
-          {skill.categories.length > 3 && (
-            <span className="text-[9px] font-mono text-muted">
-              +{skill.categories.length - 3}
-            </span>
-          )}
-        </div>
-      )}
+      {/* Source (owner/repo) */}
+      <p className="text-[11px] text-muted font-mono truncate">
+        {skill.source}
+      </p>
     </button>
   )
 }
@@ -312,16 +311,17 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
     installedNames.has(skill.name.toLowerCase()),
   )
 
+  // Fetch SKILL.md content from GitHub raw
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
     setLoading(true)
     setContent(null)
 
-    fetch(`${API_BASE}/api/v1/skills/detail?path=${encodeURIComponent(skill.urlPath)}`)
-      .then((res) => res.json())
-      .then((data: SkillDetailResponse) => {
+    fetchSkillContent(skill.source, skill.skillId, controller.signal)
+      .then((text) => {
         if (!cancelled) {
-          setContent(data.content || null)
+          setContent(text)
         }
       })
       .catch(() => {
@@ -333,8 +333,9 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
 
     return () => {
       cancelled = true
+      controller.abort()
     }
-  }, [skill.urlPath])
+  }, [skill.source, skill.skillId])
 
   // Sync installed state when prop changes
   useEffect(() => {
@@ -364,31 +365,11 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
   }, [skill.skillId])
 
   async function handleInstall() {
-    // Extract source from install command like "skillsgate add vercel/next.js --skill foo -y"
-    // or fall back to githubUrl
-    let source = ""
-    if (skill.installCommand) {
-      const parts = skill.installCommand.split(/\s+/)
-      const addIdx = parts.indexOf("add")
-      if (addIdx !== -1 && parts[addIdx + 1]) {
-        source = parts[addIdx + 1]
-      }
-    }
-    if (!source && skill.githubUrl) {
-      // Extract owner/repo from GitHub URL
-      try {
-        const url = new URL(skill.githubUrl)
-        const segments = url.pathname.split("/").filter(Boolean)
-        if (segments.length >= 2) {
-          source = `${segments[0]}/${segments[1]}`
-        }
-      } catch {}
-    }
-    if (!source) return
+    if (!skill.source) return
 
     setInstalling(true)
     try {
-      await onInstall(source, selectedAgents)
+      await onInstall(skill.source, selectedAgents)
       setInstalled(true)
     } catch (err) {
       console.error("Install failed:", err)
@@ -404,6 +385,8 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
         : [...prev, name],
     )
   }
+
+  const githubUrl = `https://github.com/${skill.source}`
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -428,46 +411,30 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
               {skill.name}
             </h2>
           </div>
-          {skill.githubUrl && (
-            <a
-              href={skill.githubUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-[11px] text-muted hover:text-foreground transition-colors"
-            >
-              GitHub <ExternalLinkIcon />
-            </a>
-          )}
+          <a
+            href={githubUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 text-[11px] text-muted hover:text-foreground transition-colors"
+          >
+            GitHub <ExternalLinkIcon />
+          </a>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {/* Meta */}
           <div className="mb-5">
-            {skill.description && (
-              <p className="text-sm text-muted mb-3">{skill.description}</p>
-            )}
-
             <div className="flex items-center gap-3 mb-3">
-              {skill.githubStars != null && skill.githubStars > 0 && (
+              <span className="text-[11px] font-mono text-muted">
+                {skill.source}
+              </span>
+              {skill.installs > 0 && (
                 <span className="flex items-center gap-1 text-[11px] font-mono text-muted">
-                  <StarIcon /> {formatStars(skill.githubStars)} stars
+                  <InstallsIcon /> {formatInstalls(skill.installs)} installs
                 </span>
               )}
             </div>
-
-            {skill.categories.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mb-4">
-                {skill.categories.map((cat) => (
-                  <span
-                    key={cat}
-                    className="text-[10px] font-mono tracking-wider uppercase text-muted bg-surface-hover px-2 py-0.5 rounded"
-                  >
-                    {cat}
-                  </span>
-                ))}
-              </div>
-            )}
 
             {/* Install button */}
             <div className="flex items-center gap-3 mb-4">
@@ -478,7 +445,7 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
               ) : (
                 <button
                   onClick={handleInstall}
-                  disabled={installing || !skill.installCommand || selectedAgents.length === 0}
+                  disabled={installing || selectedAgents.length === 0}
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-medium bg-foreground text-background hover:opacity-90 transition-opacity disabled:opacity-50"
                 >
                   {installing ? (
@@ -493,11 +460,9 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
                 </button>
               )}
 
-              {skill.installCommand && (
-                <code className="text-[11px] font-mono text-muted bg-surface px-2.5 py-1.5 rounded border border-border">
-                  $ {skill.installCommand}
-                </code>
-              )}
+              <code className="text-[11px] font-mono text-muted bg-surface px-2.5 py-1.5 rounded border border-border">
+                $ npx skills add {skill.source}
+              </code>
             </div>
 
             {!installed && availableAgents.length > 0 && (
@@ -555,27 +520,18 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
 // ---------------------------------------------------------------------------
 
 export function Discover() {
-  const { token, user } = useAuthStore()
-  const isAuthenticated = !!token
-
   const [skills, setSkills] = useState<CatalogSkill[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [searching, setSearching] = useState(false)
-  const [searchMode, setSearchMode] = useState<SearchMode>("keyword")
-  const [remainingSearches, setRemainingSearches] = useState<number | null>(null)
-  const [offset, setOffset] = useState(0)
-  const [hasMore, setHasMore] = useState(false)
   const [total, setTotal] = useState(0)
-  const [loadingMore, setLoadingMore] = useState(false)
   const [selectedSkill, setSelectedSkill] = useState<CatalogSkill | null>(null)
   const [installedNames, setInstalledNames] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
-  const LIMIT = 24
+  const LIMIT = 30
 
   // Load installed skills to mark installed state
   useEffect(() => {
@@ -585,145 +541,61 @@ export function Discover() {
     })
   }, [])
 
-  // Initial catalog load
+  // Initial catalog load (empty query returns popular skills)
   useEffect(() => {
-    fetchCatalog(0)
+    fetchSkills("")
   }, [])
 
-  async function fetchCatalog(newOffset: number) {
-    if (newOffset === 0) {
+  async function fetchSkills(query: string) {
+    if (abortRef.current) abortRef.current.abort()
+
+    const controller = new AbortController()
+    abortRef.current = controller
+
+    const isInitialLoad = !query.trim()
+    if (isInitialLoad) {
       setLoading(true)
     } else {
-      setLoadingMore(true)
+      setSearching(true)
     }
     setError(null)
 
     try {
-      const res = await fetch(
-        `${API_BASE}/api/v1/skills?limit=${LIMIT}&offset=${newOffset}`,
-      )
+      const url = `${SKILLS_SH_API}/search?q=${encodeURIComponent(query)}&limit=${LIMIT}`
+      const res = await fetch(url, { signal: controller.signal })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data: CatalogResponse = await res.json()
-
-      if (newOffset === 0) {
-        setSkills(data.skills)
-      } else {
-        setSkills((prev) => [...prev, ...data.skills])
-      }
-      setOffset(newOffset + data.skills.length)
-      setHasMore(data.meta.hasMore)
-      setTotal(data.meta.total)
-    } catch (err) {
-      setError("Failed to load catalog. Check your connection.")
-      console.error("Catalog fetch error:", err)
-    } finally {
-      setLoading(false)
-      setLoadingMore(false)
-    }
-  }
-
-  async function fetchSearch(query: string) {
-    if (abortRef.current) abortRef.current.abort()
-
-    const controller = new AbortController()
-    abortRef.current = controller
-    setSearching(true)
-    setError(null)
-
-    try {
-      const res = await fetch(
-        `${API_BASE}/api/v1/skills/search?q=${encodeURIComponent(query)}&limit=30`,
-        { signal: controller.signal },
-      )
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data: KeywordSearchResponse = await res.json()
+      const data: SkillsShSearchResponse = await res.json()
 
       setSkills(data.skills)
-      setHasMore(data.meta.hasMore)
-      setTotal(data.meta.total)
-      setOffset(data.skills.length)
+      setTotal(data.count)
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return
-      setError("Search failed. Please try again.")
-      console.error("Search error:", err)
+      setError(
+        isInitialLoad
+          ? "Failed to load catalog. Check your connection."
+          : "Search failed. Please try again.",
+      )
+      console.error("Fetch error:", err)
     } finally {
-      setSearching(false)
-    }
-  }
-
-  async function fetchSemanticSearch(query: string) {
-    if (!token) return
-    if (abortRef.current) abortRef.current.abort()
-
-    const controller = new AbortController()
-    abortRef.current = controller
-    setSearching(true)
-    setError(null)
-
-    try {
-      const res = await fetch(`${API_BASE}/api/v1/search`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ query, limit: 5 }),
-        signal: controller.signal,
-      })
-      if (res.status === 429) {
-        setError("Daily search limit reached. Switch to keyword search.")
-        setRemainingSearches(0)
-        return
-      }
-      if (res.status === 401) {
-        setError("Session expired. Please sign in again.")
-        return
-      }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data: SemanticSearchResponse = await res.json()
-
-      setSkills(data.results)
-      setHasMore(false)
-      setTotal(data.meta.total)
-      setRemainingSearches(data.meta.remainingSearches)
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return
-      setError("Semantic search failed. Please try again.")
-      console.error("Semantic search error:", err)
-    } finally {
+      setLoading(false)
       setSearching(false)
     }
   }
 
   const handleSearchChange = useCallback((value: string) => {
     setSearchQuery(value)
-    // Only update the input value -- actual search triggers on Enter
     if (!value.trim()) {
-      setOffset(0)
-      fetchCatalog(0)
+      fetchSkills("")
     }
   }, [])
 
   const handleSearchSubmit = useCallback(() => {
     if (!searchQuery.trim()) return
-    if (searchMode === "semantic" && token) {
-      fetchSemanticSearch(searchQuery.trim())
-    } else {
-      fetchSearch(searchQuery.trim())
-    }
-  }, [searchQuery, searchMode, token])
+    fetchSkills(searchQuery.trim())
+  }, [searchQuery])
 
-  function handleLoadMore() {
-    if (searchQuery.trim()) {
-      // For search results, load next page
-      fetchSearch(searchQuery.trim())
-    } else {
-      fetchCatalog(offset)
-    }
-  }
-
-  async function handleInstall(source: string, agentNames: string[]) {
-    const results = await electronAPI.installSkill(source, agentNames, "global")
+  async function handleInstall(source: string, _agentNames: string[]) {
+    const results = await electronAPI.installSkill(source, _agentNames, "global")
     const hasError = results.some((r) => !r.success)
     if (hasError) {
       const errorMsg = results
@@ -744,43 +616,11 @@ export function Discover() {
       <div className="px-8 pt-6 pb-4">
         <h2 className="text-xl font-bold text-foreground mb-1">Discover</h2>
         <p className="text-[12px] text-muted mb-5">
-          Browse and search the SkillsGate catalog.{" "}
+          Browse and search skills.{" "}
           {total > 0 && !searchQuery.trim() && (
             <span className="font-mono">{total} skills available</span>
           )}
         </p>
-
-        {/* Search mode toggle + bar */}
-        <div className="flex items-center gap-3 mb-3">
-          <div className="flex items-center rounded-lg border border-border bg-surface overflow-hidden text-[12px]">
-            <button
-              onClick={() => { setSearchMode("keyword") }}
-              className={`px-3 py-1.5 transition-colors ${searchMode === "keyword" ? "bg-surface-hover text-foreground font-medium" : "text-muted hover:text-foreground"}`}
-            >
-              Keyword
-            </button>
-            <button
-              onClick={() => {
-                if (!isAuthenticated) return
-                setSearchMode("semantic")
-              }}
-              className={`px-3 py-1.5 transition-colors ${searchMode === "semantic" ? "bg-surface-hover text-foreground font-medium" : "text-muted hover:text-foreground"} ${!isAuthenticated ? "opacity-40 cursor-not-allowed" : ""}`}
-              title={!isAuthenticated ? "Sign in to use AI search" : "AI-powered semantic search"}
-            >
-              AI Search
-            </button>
-          </div>
-          {searchMode === "semantic" && remainingSearches !== null && (
-            <span className={`text-[11px] font-mono ${remainingSearches <= 5 ? "text-red-400" : "text-muted"}`}>
-              {remainingSearches} search{remainingSearches !== 1 ? "es" : ""} remaining today
-            </span>
-          )}
-          {!isAuthenticated && (
-            <span className="text-[11px] text-muted">
-              Sign in to unlock AI search
-            </span>
-          )}
-        </div>
 
         <div className="relative max-w-xl">
           <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
@@ -788,7 +628,7 @@ export function Discover() {
           </div>
           <input
             type="text"
-            placeholder={searchMode === "semantic" ? 'AI search -- try "audit website performance" (Enter to search)' : "Search by name, keyword, or category... (Enter to search)"}
+            placeholder="Search by name or keyword... (Enter to search)"
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") handleSearchSubmit() }}
@@ -868,37 +708,16 @@ export function Discover() {
             </p>
           </div>
         ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-              {skills.map((skill) => (
-                <SkillCard
-                  key={skill.skillId}
-                  skill={skill}
-                  onSelect={setSelectedSkill}
-                  installedNames={installedNames}
-                />
-              ))}
-            </div>
-
-            {/* Load more */}
-            {hasMore && !searchQuery.trim() && (
-              <div className="flex justify-center mt-6">
-                <button
-                  onClick={handleLoadMore}
-                  disabled={loadingMore}
-                  className="px-6 py-2 rounded-lg text-[12px] font-medium border border-border text-muted hover:text-foreground hover:bg-surface-hover transition-colors disabled:opacity-50"
-                >
-                  {loadingMore ? (
-                    <span className="flex items-center gap-2">
-                      <SpinnerIcon /> Loading...
-                    </span>
-                  ) : (
-                    "Load more"
-                  )}
-                </button>
-              </div>
-            )}
-          </>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {skills.map((skill) => (
+              <SkillCard
+                key={skill.id}
+                skill={skill}
+                onSelect={setSelectedSkill}
+                installedNames={installedNames}
+              />
+            ))}
+          </div>
         )}
       </div>
 

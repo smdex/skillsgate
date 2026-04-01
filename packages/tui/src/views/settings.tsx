@@ -35,12 +35,6 @@ const SETTING_DEFS: SettingDef[] = [
     defaultValue: "dark",
   },
   {
-    key: "search.preferSemantic",
-    label: "Prefer semantic search",
-    type: "toggle",
-    defaultValue: true,
-  },
-  {
     key: "telemetry.enabled",
     label: "Anonymous telemetry",
     type: "toggle",

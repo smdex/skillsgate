@@ -6,6 +6,7 @@ import { useKeyboard } from "@opentui/react"
 import { useStore, useDispatch } from "../store/context.js"
 import { useSkillActions } from "../data/use-skill-actions.js"
 import { ConfirmDialog } from "../components/confirm-dialog.js"
+import { fetchSkillContent } from "../data/api-client.js"
 import { colors, agentBadges as badgeMap } from "../utils/colors.js"
 import { agents } from "../../../cli/src/core/agents.js"
 
@@ -75,19 +76,15 @@ export function SkillDetailView() {
       return
     }
 
-    // Catalog skill: fetch content from API
-    const githubUrl = skill.metadata?.githubUrl as string | undefined
-    const urlPath = skill.metadata?.urlPath as string | undefined
-    if (githubUrl || urlPath) {
+    // Catalog skill: fetch SKILL.md content from GitHub
+    const source = skill.metadata?.source as string | undefined
+    const skillId = skill.metadata?.skillId as string | undefined
+    if (source && skillId) {
       setContentLoading(true)
-      const detailPath = urlPath
-        ? `/api/v1/skills/detail?path=${encodeURIComponent(urlPath)}`
-        : `/api/v1/skills/detail?path=${encodeURIComponent(skill.name)}`
-      fetch(`https://api.skillsgate.ai${detailPath}`)
-        .then(res => res.ok ? res.json() : null)
-        .then((data: any) => {
-          if (data?.content) {
-            setContent(stripFrontmatter(data.content))
+      fetchSkillContent(source, skillId)
+        .then((md) => {
+          if (md) {
+            setContent(stripFrontmatter(md))
           } else {
             setContent(skill.description || "(No content available)")
           }
@@ -424,8 +421,12 @@ export function SkillDetailView() {
         <text>{" "}</text>
 
         {/* Description */}
-        <text fg={colors.text}>{skill.description}</text>
-        <text>{" "}</text>
+        {skill.description ? (
+          <>
+            <text fg={colors.text}>{skill.description}</text>
+            <text>{" "}</text>
+          </>
+        ) : null}
 
         {/* Source */}
         <text fg={colors.textDim}>Source</text>
