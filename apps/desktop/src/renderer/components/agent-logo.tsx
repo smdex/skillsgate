@@ -83,7 +83,7 @@ export function AgentLogo({ name, size = 16, shortCode, className = "" }: AgentL
         width={size}
         height={size}
         className={`inline-block flex-shrink-0 ${className}`}
-        style={{ width: size, height: size }}
+        style={{ width: size, height: size, filter: "invert(1) brightness(0.9)" }}
         draggable={false}
       />
     )
