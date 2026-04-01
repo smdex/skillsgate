@@ -1,5 +1,6 @@
 import { HashRouter, Routes, Route } from "react-router-dom"
 import { Sidebar } from "./components/sidebar"
+import { UpdateBanner } from "./components/update-banner"
 import { Home } from "./routes/home"
 import { Discover } from "./routes/discover"
 import { Servers } from "./routes/servers"
@@ -13,6 +14,7 @@ export function App() {
       <div className="flex h-screen overflow-hidden bg-background text-foreground font-sans">
         <Sidebar />
         <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+          <UpdateBanner />
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/discover" element={<div className="flex-1 overflow-y-auto"><Discover /></div>} />
