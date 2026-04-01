@@ -11,10 +11,10 @@
     "dist"
   ],
   "exports": {
-    ".": {
-      "types": "./dist/cli.d.ts",
-      "import": "./dist/cli.js"
-    }
+    "./core/*": "./dist/core/*.js",
+    "./utils/*": "./dist/utils/*.js",
+    "./constants": "./dist/constants.js",
+    "./types": "./dist/types.js"
   },
   "engines": {
     "node": ">=18"
