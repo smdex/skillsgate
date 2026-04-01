@@ -543,7 +543,8 @@ export function Discover() {
 
   // Initial catalog load (empty query returns popular skills)
   useEffect(() => {
-    fetchSkills("")
+    // skills.sh requires a minimum 2-char query, so load popular skills on mount
+    fetchSkills("skill")
   }, [])
 
   async function fetchSkills(query: string) {

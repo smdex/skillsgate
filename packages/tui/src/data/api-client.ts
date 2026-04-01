@@ -33,10 +33,9 @@ export async function searchSkills(
   query: string,
   limit: number = 20
 ): Promise<SearchResult> {
-  const params = new URLSearchParams({ limit: String(limit) })
-  if (query.trim()) {
-    params.set("q", query)
-  }
+  // skills.sh requires a minimum 2-char query
+  const q = query.trim() || "skill"
+  const params = new URLSearchParams({ q, limit: String(limit) })
 
   const url = `${SKILLS_SH_BASE}/api/search?${params}`
   const response = await fetch(url, {
