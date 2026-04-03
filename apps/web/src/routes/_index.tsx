@@ -93,12 +93,8 @@ const FAQ_ITEMS = [
 		a: "SkillsGate supports 18+ agents including Claude Code, Cursor, Windsurf, GitHub Copilot, Codex CLI, Cline, Continue, Amp, Goose, Roo Code, Zed, Aider, and more. Any agent that reads SKILL.md or .cursorrules-style files is compatible.",
 	},
 	{
-		q: "What about private skills?",
-		a: "Create a free SkillsGate account to store private skills that sync across your machines. Private skills never appear in public search.",
-	},
-	{
 		q: "Is SkillsGate free?",
-		a: "Yes. The desktop app, TUI, browsing, and installing public skills are all free. Private skill storage requires a free account.",
+		a: "Yes. The desktop app, TUI, browsing, and installing public skills are all free.",
 	},
 	{
 		q: "Desktop app or TUI?",
@@ -262,9 +258,9 @@ export default function Home() {
 					{/* Feature cards */}
 					<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-14">
 						<div className="bg-card-bg border border-card-border rounded-xl p-6">
-							<h3 className="text-[14px] font-semibold text-foreground mb-1.5">Private skills</h3>
+							<h3 className="text-[14px] font-semibold text-foreground mb-1.5">Open source</h3>
 							<p className="text-[12px] text-muted leading-relaxed">
-								Sign in with a free SkillsGate account to store private skills that sync across your devices and never appear in public search.
+								SkillsGate is fully open source. Browse the code, contribute features, and shape the future of agent skill management.
 							</p>
 						</div>
 						<div className="bg-card-bg border border-card-border rounded-xl p-6">
@@ -276,7 +272,7 @@ export default function Home() {
 						<div className="bg-card-bg border border-card-border rounded-xl p-6">
 							<h3 className="text-[14px] font-semibold text-foreground mb-1.5">Settings sync</h3>
 							<p className="text-[12px] text-muted leading-relaxed">
-								Desktop and TUI share preferences and auth via a local SQLite database. Sign in once, use everywhere.
+								Desktop and TUI share preferences via a local SQLite database. Configure once, use everywhere.
 							</p>
 						</div>
 					</div>
@@ -493,7 +489,6 @@ export default function Home() {
 								Product
 							</span>
 							<div className="space-y-2.5">
-								<a href="#skills" className="block text-[13px] text-muted hover:text-foreground transition-colors">Skills</a>
 								<a href="#features" className="block text-[13px] text-muted hover:text-foreground transition-colors">Features</a>
 								<a href="#faq" className="block text-[13px] text-muted hover:text-foreground transition-colors">FAQ</a>
 							</div>

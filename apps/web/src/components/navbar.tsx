@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { ThemeToggle } from "./theme-toggle";
-import { AuthButton } from "./auth-button";
 import { NavbarStarButton } from "./github-star-prompt";
 
 export function Navbar() {
@@ -40,22 +39,10 @@ export function Navbar() {
 				{/* Center nav links */}
 				<div className="hidden md:flex items-center gap-8">
 					<a
-						href="/#skills"
-						className="text-[13px] tracking-wide uppercase text-muted hover:text-foreground transition-colors"
-					>
-						Skills
-					</a>
-					<a
 						href="/#features"
 						className="text-[13px] tracking-wide uppercase text-muted hover:text-foreground transition-colors"
 					>
 						Features
-					</a>
-					<a
-						href="/docs"
-						className="text-[13px] tracking-wide uppercase text-muted hover:text-foreground transition-colors"
-					>
-						Docs
 					</a>
 					<a
 						href="/blog"
@@ -69,7 +56,6 @@ export function Navbar() {
 				{/* Right section */}
 				<div className="flex items-center gap-3">
 					<ThemeToggle />
-					<AuthButton />
 				</div>
 			</div>
 		</nav>
