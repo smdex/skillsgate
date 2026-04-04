@@ -7,6 +7,7 @@ import { AGENTS_DIR, SKILLS_SUBDIR } from "../constants.js";
 
 const home = os.homedir();
 const configHome = process.env.XDG_CONFIG_HOME || path.join(home, ".config");
+const factoryHome = process.env.FACTORY_HOME || path.join(home, ".factory");
 
 async function dirExists(p: string): Promise<boolean> {
   try {
@@ -89,6 +90,14 @@ export const agents: Record<string, AgentConfig> = {
         process.env.CODEX_HOME || path.join(home, ".codex"),
       );
     },
+  },
+
+  "droid-cli": {
+    name: "droid-cli",
+    displayName: "Droid CLI",
+    skillsDir: ".factory/skills",
+    globalSkillsDir: path.join(factoryHome, "skills"),
+    detectInstalled: async () => dirExists(factoryHome),
   },
 
   amp: {

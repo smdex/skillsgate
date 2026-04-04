@@ -5,6 +5,7 @@ export type AgentType =
   | "claude-code"
   | "cline"
   | "codex-cli"
+  | "droid-cli"
   | "continue"
   | "cursor"
   | "github-copilot"

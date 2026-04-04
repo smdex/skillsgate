@@ -24,6 +24,7 @@ import { checkForAppUpdates, getUpdateState, quitAndInstallUpdate } from "./auto
 
 const home = os.homedir()
 const configHome = process.env.XDG_CONFIG_HOME || path.join(home, ".config")
+const factoryHome = process.env.FACTORY_HOME || path.join(home, ".factory")
 
 interface AgentEntry {
   name: string
@@ -108,6 +109,13 @@ const agentRegistry: Record<string, AgentEntry> = {
     ),
     detectInstalled: () =>
       dirExists(process.env.CODEX_HOME || path.join(home, ".codex")),
+  },
+  "droid-cli": {
+    name: "droid-cli",
+    displayName: "Droid CLI",
+    shortCode: "DR",
+    globalSkillsDir: path.join(factoryHome, "skills"),
+    detectInstalled: () => dirExists(factoryHome),
   },
   amp: {
     name: "amp",
