@@ -5,6 +5,7 @@ import codexLogo from "../assets/agent-logos/codex.svg"
 import copilotLogo from "../assets/agent-logos/copilot.svg"
 import cursorLogo from "../assets/agent-logos/cursor.svg"
 import droidCliLogo from "../assets/agent-logos/droid-cli.svg"
+import ob1Logo from "../assets/agent-logos/ob-1.svg"
 import openclawLogo from "../assets/agent-logos/openclaw.svg"
 import opencodeLogo from "../assets/agent-logos/opencode.svg"
 import windsurfLogo from "../assets/agent-logos/windsurf.svg"
@@ -16,6 +17,7 @@ const AGENT_LOGOS: Record<string, string> = {
   windsurf: windsurfLogo,
   "codex-cli": codexLogo,
   "droid-cli": droidCliLogo,
+  "ob-1": ob1Logo,
   amp: ampLogo,
   opencode: opencodeLogo,
   openclaw: openclawLogo,
@@ -30,6 +32,7 @@ const DISPLAY_NAME_TO_KEY: Record<string, string> = {
   Continue: "continue",
   "Codex CLI": "codex-cli",
   "Droid CLI": "droid-cli",
+  "OB-1": "ob-1",
   Amp: "amp",
   Goose: "goose",
   Junie: "junie",
