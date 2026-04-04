@@ -23,6 +23,10 @@ const AGENT_LOGOS: Record<string, string> = {
   openclaw: openclawLogo,
 }
 
+const AGENT_LOGO_FILTERS: Record<string, string> = {
+  "ob-1": "none",
+}
+
 const DISPLAY_NAME_TO_KEY: Record<string, string> = {
   "Claude Code": "claude-code",
   Cursor: "cursor",
@@ -81,6 +85,7 @@ interface AgentLogoProps {
 export const AgentLogo = memo(function AgentLogo({ name, size = 16, shortCode, className = "" }: AgentLogoProps) {
   const key = getAgentKey(name)
   const logo = AGENT_LOGOS[key]
+  const logoFilter = AGENT_LOGO_FILTERS[key] ?? "invert(1) brightness(0.9)"
 
   if (logo) {
     return (
@@ -90,7 +95,7 @@ export const AgentLogo = memo(function AgentLogo({ name, size = 16, shortCode, c
         width={size}
         height={size}
         className={`inline-block flex-shrink-0 ${className}`}
-        style={{ width: size, height: size, filter: "invert(1) brightness(0.9)" }}
+        style={{ width: size, height: size, filter: logoFilter }}
         draggable={false}
       />
     )
