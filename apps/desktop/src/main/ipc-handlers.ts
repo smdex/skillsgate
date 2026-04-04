@@ -25,6 +25,7 @@ import { checkForAppUpdates, getUpdateState, quitAndInstallUpdate } from "./auto
 const home = os.homedir()
 const configHome = process.env.XDG_CONFIG_HOME || path.join(home, ".config")
 const factoryHome = process.env.FACTORY_HOME || path.join(home, ".factory")
+const ob1Home = process.env.OB1_HOME || path.join(home, ".ob1")
 
 
 interface AgentEntry {
@@ -117,6 +118,13 @@ const agentRegistry: Record<string, AgentEntry> = {
     shortCode: "DR",
     globalSkillsDir: path.join(factoryHome, "skills"),
     detectInstalled: () => dirExists(factoryHome),
+  },
+  "ob-1": {
+    name: "ob-1",
+    displayName: "OB-1",
+    shortCode: "OB1",
+    globalSkillsDir: path.join(ob1Home, "skills"),
+    detectInstalled: () => dirExists(ob1Home),
   },
   amp: {
     name: "amp",

@@ -26,6 +26,7 @@ export const agentBadges: Record<string, { label: string; color: string }> = {
   windsurf:         { label: "W",  color: "#00CED1" }, // cyan
   "codex-cli":      { label: "Cx", color: "#FF4444" }, // red
   "droid-cli":      { label: "Dr", color: "#22D3EE" }, // cyan
+  "ob-1":          { label: "OB", color: "#12B3DF" }, // openblock cyan
   opencode:         { label: "O",  color: "#2ECCAA" }, // teal
   zed:              { label: "Z",  color: "#FFFF00" }, // yellow
   "github-copilot": { label: "Gh", color: "#8B5CF6" }, // purple

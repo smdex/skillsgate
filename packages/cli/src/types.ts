@@ -6,6 +6,7 @@ export type AgentType =
   | "cline"
   | "codex-cli"
   | "droid-cli"
+  | "ob-1"
   | "continue"
   | "cursor"
   | "github-copilot"

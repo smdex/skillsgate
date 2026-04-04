@@ -35,6 +35,7 @@ const PRIORITY_SEARCH_SUFFIXES = [
   ".kiro/skills",
   ".mux/skills",
   ".neovate/skills",
+  ".ob1/skills",
   ".opencode/skills",
   ".openhands/skills",
   ".pi/skills",
