@@ -26,6 +26,7 @@ const DISPLAY_NAME_TO_KEY: Record<string, string> = {
   Cline: "cline",
   Continue: "continue",
   "Codex CLI": "codex-cli",
+  "Droid CLI": "droid-cli",
   Amp: "amp",
   Goose: "goose",
   Junie: "junie",

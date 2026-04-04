@@ -26,6 +26,7 @@ const PRIORITY_SEARCH_SUFFIXES = [
   ".codex/skills",
   ".commandcode/skills",
   ".continue/skills",
+  ".factory/skills",
   ".github/skills",
   ".goose/skills",
   ".iflow/skills",
