@@ -38,5 +38,13 @@ try {
     timeout: 30000,
   });
 } catch {
-  console.warn(`Warning: could not install @skillsgate/${pkg}. Run manually: npm install -g @skillsgate/${pkg}`);
+  // Fallback to latest if exact version is not published for this platform
+  try {
+    execSync(`npm install -g @skillsgate/${pkg}@latest --no-save`, {
+      stdio: "inherit",
+      timeout: 30000,
+    });
+  } catch {
+    console.warn(`Warning: could not install @skillsgate/${pkg}. Run manually: npm install -g @skillsgate/${pkg}`);
+  }
 }

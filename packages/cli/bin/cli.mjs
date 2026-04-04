@@ -56,7 +56,14 @@ if (!binPath) {
     execSync(`npm install -g ${fullPkg}`, { stdio: "inherit", timeout: 30000 });
     binPath = findBinary();
   } catch {
-    // fall through to error below
+    // Fallback to latest if exact version is not published for this platform
+    console.error(`Failed to install ${fullPkg}. Falling back to latest...`);
+    try {
+      execSync(`npm install -g @skillsgate/${pkg}@latest`, { stdio: "inherit", timeout: 30000 });
+      binPath = findBinary();
+    } catch {
+      // fall through to error below
+    }
   }
 }
 
