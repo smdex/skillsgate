@@ -3,6 +3,7 @@ import claudeLogo from "../assets/agent-logos/claude.svg"
 import codexLogo from "../assets/agent-logos/codex.svg"
 import copilotLogo from "../assets/agent-logos/copilot.svg"
 import cursorLogo from "../assets/agent-logos/cursor.svg"
+import droidCliLogo from "../assets/agent-logos/droid-cli.svg"
 import openclawLogo from "../assets/agent-logos/openclaw.svg"
 import opencodeLogo from "../assets/agent-logos/opencode.svg"
 import windsurfLogo from "../assets/agent-logos/windsurf.svg"
@@ -13,6 +14,7 @@ const AGENT_LOGOS: Record<string, string> = {
   "github-copilot": copilotLogo,
   windsurf: windsurfLogo,
   "codex-cli": codexLogo,
+  "droid-cli": droidCliLogo,
   amp: ampLogo,
   opencode: opencodeLogo,
   openclaw: openclawLogo,
