@@ -340,6 +340,7 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
   const [content, setContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [installing, setInstalling] = useState(false)
+  const [installError, setInstallError] = useState<string | null>(null)
   const [installed, setInstalled] = useState(
     installedNames.has(skill.name.toLowerCase()),
   )
@@ -399,11 +400,13 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
     if (!skill.source) return
 
     setInstalling(true)
+    setInstallError(null)
     try {
       await onInstall(skill.source, selectedAgents)
       setInstalled(true)
     } catch (err) {
-      console.error("Install failed:", err)
+      const msg = err instanceof Error ? err.message : String(err)
+      setInstallError(msg)
     } finally {
       setInstalling(false)
     }
@@ -503,6 +506,10 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
                 defaults={defaultAgents}
                 onToggle={toggleAgent}
               />
+            )}
+
+            {installError && (
+              <p className="text-[12px] text-red-400 mt-3">{installError}</p>
             )}
           </div>
 
@@ -622,14 +629,11 @@ export function Discover() {
   }, [handleLoadMore, loadingMore, hasMore])
 
   async function handleInstall(source: string, _agentNames: string[]) {
-    const results = await electronAPI.installSkill(source, _agentNames, "global")
-    const hasError = results.some((r) => !r.success)
-    if (hasError) {
-      const errorMsg = results
-        .filter((r) => !r.success)
-        .map((r) => r.error)
-        .join(", ")
-      throw new Error(errorMsg)
+    // Use npx skills add for skills.sh sources — handles content-based install
+    // (Chops pattern) without cloning entire repos
+    const result = await electronAPI.installSkillViaCli(source)
+    if (!result.success) {
+      throw new Error(result.error || "Install failed")
     }
 
     // Refresh installed skills list

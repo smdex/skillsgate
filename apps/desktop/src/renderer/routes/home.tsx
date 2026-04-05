@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef, memo } from "react"
-import { FixedSizeList } from "react-window"
+import { List } from "react-window"
 import { marked } from "marked"
 import { electronAPI } from "../lib/electron-api"
 import { SkillEditor } from "../components/skill-editor"
@@ -637,7 +637,7 @@ function MiddlePanel({
             )}
           </div>
         ) : (
-          <FixedSizeList
+          <List
             height={listHeight}
             itemCount={filteredSkills.length}
             itemSize={36}
@@ -656,7 +656,7 @@ function MiddlePanel({
             overscanCount={10}
           >
             {SkillListRow}
-          </FixedSizeList>
+          </List>
         )}
       </div>
 
