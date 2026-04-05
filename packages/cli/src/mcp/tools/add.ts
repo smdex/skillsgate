@@ -20,12 +20,12 @@ import type { AgentConfig, InstallMethod, InstallScope } from "../../types.js";
 export function registerAdd(server: McpServer): void {
   server.tool(
     "skillsgate_add",
-    "Install AI agent skills from SkillsGate (@username/slug), GitHub (owner/repo), or a local path.",
+    "Install AI agent skills from GitHub (owner/repo) or a local path.",
     {
       source: z
         .string()
         .describe(
-          "Skill source: @username/slug (SkillsGate), owner/repo (GitHub), or a local path (./path).",
+          "Skill source: owner/repo (GitHub) or a local path (./path).",
         ),
       agents: z
         .array(z.string())
@@ -162,29 +162,18 @@ export function registerAdd(server: McpServer): void {
 
         // 7. Update lock file for global non-local installs
         if (scope === "global" && !isLocal) {
-          if (parsed.type === "skillsgate") {
-            for (const skill of skills) {
-              await addSkillToLock(sanitizeName(skill.name), {
-                source: `skillsgate:@${parsed.username}/${parsed.slug}`,
-                sourceType: "skillsgate",
-                originalUrl: `@${parsed.username}/${parsed.slug}`,
-                skillFolderHash: "",
-              });
-            }
-          } else {
-            for (const skill of skills) {
-              const sha = await fetchTreeSha(
-                parsed.owner,
-                parsed.repo,
-                sanitizeName(skill.name),
-              );
-              await addSkillToLock(sanitizeName(skill.name), {
-                source: `github:${getOwnerRepo(parsed)}`,
-                sourceType: "github",
-                originalUrl: source,
-                skillFolderHash: sha || "",
-              });
-            }
+          for (const skill of skills) {
+            const sha = await fetchTreeSha(
+              parsed.owner,
+              parsed.repo,
+              sanitizeName(skill.name),
+            );
+            await addSkillToLock(sanitizeName(skill.name), {
+              source: `github:${getOwnerRepo(parsed)}`,
+              sourceType: "github",
+              originalUrl: source,
+              skillFolderHash: sha || "",
+            });
           }
         }
 

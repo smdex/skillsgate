@@ -42,7 +42,7 @@ export interface Skill {
 
 // ---------- Source Parsing ----------
 
-export type SourceType = "github" | "local" | "skillsgate";
+export type SourceType = "github" | "local";
 
 export interface ParsedSource {
   type: SourceType;
@@ -53,8 +53,6 @@ export interface ParsedSource {
   ref?: string;
   skillFilter?: string;
   localPath?: string;
-  slug?: string;
-  username?: string;
 }
 
 // ---------- Lock File ----------

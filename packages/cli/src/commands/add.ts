@@ -174,31 +174,20 @@ export async function runAdd(args: string[]): Promise<void> {
 
     installSpinner.stop("Installation complete.");
 
-    // Update lock file for global installs (GitHub and SkillsGate)
+    // Update lock file for global GitHub installs
     if (scope === "global" && !isLocal) {
-      if (parsed.type === "skillsgate") {
-        for (const skill of selectedSkills) {
-          await addSkillToLock(sanitizeName(skill.name), {
-            source: `skillsgate:@${parsed.username}/${parsed.slug}`,
-            sourceType: "skillsgate",
-            originalUrl: `@${parsed.username}/${parsed.slug}`,
-            skillFolderHash: "",
-          });
-        }
-      } else {
-        for (const skill of selectedSkills) {
-          const sha = await fetchTreeSha(
-            parsed.owner,
-            parsed.repo,
-            sanitizeName(skill.name),
-          );
-          await addSkillToLock(sanitizeName(skill.name), {
-            source: `github:${getOwnerRepo(parsed)}`,
-            sourceType: "github",
-            originalUrl: source,
-            skillFolderHash: sha || "",
-          });
-        }
+      for (const skill of selectedSkills) {
+        const sha = await fetchTreeSha(
+          parsed.owner,
+          parsed.repo,
+          sanitizeName(skill.name),
+        );
+        await addSkillToLock(sanitizeName(skill.name), {
+          source: `github:${getOwnerRepo(parsed)}`,
+          sourceType: "github",
+          originalUrl: source,
+          skillFolderHash: sha || "",
+        });
       }
     }
     if (scope === "global") {
