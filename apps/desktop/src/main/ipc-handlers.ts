@@ -2,7 +2,7 @@ import { ipcMain, shell, type BrowserWindow } from "electron"
 import os from "node:os"
 import path from "node:path"
 import fs from "node:fs/promises"
-import { execFile } from "node:child_process"
+import { execFile, execSync } from "node:child_process"
 import matter from "gray-matter"
 import { app } from "electron"
 import { openDb } from "./db/index"
@@ -25,6 +25,29 @@ import { checkForAppUpdates, getUpdateState, quitAndInstallUpdate } from "./auto
 const home = os.homedir()
 const configHome = process.env.XDG_CONFIG_HOME || path.join(home, ".config")
 const factoryHome = process.env.FACTORY_HOME || path.join(home, ".factory")
+
+// Resolve the user's login shell PATH for packaged Electron builds
+// (Electron's process.env.PATH is minimal and may not include nvm/homebrew/etc.)
+let userShellEnv: Record<string, string> | null = null
+function getShellEnv(): Record<string, string> {
+  if (userShellEnv) return userShellEnv
+  try {
+    const userShell = process.env.SHELL || "/bin/zsh"
+    const result = execSync(`${userShell} -ilc 'env'`, {
+      timeout: 5_000,
+      encoding: "utf-8",
+    })
+    const env: Record<string, string> = {}
+    for (const line of result.split("\n")) {
+      const idx = line.indexOf("=")
+      if (idx > 0) env[line.slice(0, idx)] = line.slice(idx + 1)
+    }
+    userShellEnv = env
+    return env
+  } catch {
+    return process.env as Record<string, string>
+  }
+}
 
 interface AgentEntry {
   name: string
@@ -704,11 +727,12 @@ function gitClone(
   url: string,
   dest: string,
 ): Promise<{ success: boolean; error?: string }> {
+  const env = getShellEnv()
   return new Promise((resolve) => {
     execFile(
       "git",
       ["clone", "--depth", "1", url, dest],
-      { timeout: 60_000 },
+      { timeout: 60_000, env },
       (error) => {
         if (error) {
           resolve({ success: false, error: error.message })
@@ -1182,11 +1206,12 @@ export function registerIpcHandlers(): void {
       _event,
       source: string,
     ): Promise<{ success: boolean; output: string; error?: string }> => {
+      const env = getShellEnv()
       return new Promise((resolve) => {
         execFile(
           "npx",
           ["skills", "add", source, "--all", "-y"],
-          { timeout: 120_000, shell: true },
+          { timeout: 120_000, shell: true, env },
           (error, stdout, stderr) => {
             if (error) {
               resolve({
