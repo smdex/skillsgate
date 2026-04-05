@@ -1,4 +1,3 @@
-const SKILLSGATE_API_BASE = process.env.SKILLSGATE_SEARCH_API_URL ?? "https://api.skillsgate.ai"
 const SKILLS_SH_BASE = "https://skills.sh"
 const GITHUB_API_BASE = "https://api.github.com"
 const GITHUB_RAW_BASE = "https://raw.githubusercontent.com"
@@ -115,6 +114,3 @@ export async function fetchSkillContent(
   return null
 }
 
-// ---------- SkillsGate API (auth, favorites, private skills) ----------
-
-export { SKILLSGATE_API_BASE }

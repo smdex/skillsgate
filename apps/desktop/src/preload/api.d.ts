@@ -35,18 +35,6 @@ declare global {
     error?: string
   }
 
-  interface StoredAuthUser {
-    id: string
-    name: string
-    email: string
-    image?: string
-  }
-
-  interface StoredAuth {
-    token: string
-    user: StoredAuthUser
-  }
-
   // Remote server types
   interface RemoteServer {
     id: string
@@ -139,12 +127,6 @@ declare global {
       canonicalPath: string,
       agentName: string,
     ) => Promise<void>
-
-    // Auth
-    authLoad: () => Promise<StoredAuth | null>
-    authExchange: (code: string) => Promise<StoredAuth>
-    authLogout: () => Promise<void>
-    authOpenBrowser: (url: string) => Promise<void>
 
     // Remote servers
     serversList: () => Promise<RemoteServer[]>

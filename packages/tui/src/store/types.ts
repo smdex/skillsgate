@@ -5,14 +5,12 @@ import type { AgentType, SkillLockEntry, SourceType } from "../../../cli/src/typ
 export type ViewName =
   | "home"
   | "discover"
-  | "favorites"
   | "servers"
   | "server-skills"
   | "add-server"
   | "edit-server"
   | "settings"
   | "detail"
-  | "login"
 
 // ---------- Enriched Skill ----------
 
@@ -44,13 +42,6 @@ export interface DetectedAgent {
   skillCount: number
 }
 
-// ---------- Auth ----------
-
-export interface AuthState {
-  token: string
-  user: { id: string; name: string; email: string }
-}
-
 // ---------- Notification ----------
 
 export interface Notification {
@@ -68,9 +59,6 @@ export interface AppState {
   activeView: ViewName
   previousView: ViewName | null
 
-  // Auth
-  auth: AuthState | null
-
   // Agent detection
   detectedAgents: DetectedAgent[]
 
@@ -84,10 +72,6 @@ export interface AppState {
   searchQuery: string
   searchResults: unknown[]
   searchLoading: boolean
-
-  // Favorites
-  favorites: unknown[]
-  favoritesLoading: boolean
 
   // Detail
   selectedSkill: EnrichedSkill | null
@@ -108,7 +92,6 @@ export interface AppState {
 export type Action =
   | { type: "NAVIGATE"; view: ViewName }
   | { type: "GO_BACK" }
-  | { type: "SET_AUTH"; auth: AuthState | null }
   | { type: "SET_DETECTED_AGENTS"; agents: DetectedAgent[] }
   | { type: "UPDATE_AGENT_COUNTS"; counts: Record<string, number> }
   | { type: "SET_AGENT_FILTER"; filter: string }
@@ -118,8 +101,6 @@ export type Action =
   | { type: "SET_SEARCH_QUERY"; query: string }
   | { type: "SET_SEARCH_RESULTS"; results: unknown[] }
   | { type: "SET_SEARCH_LOADING"; loading: boolean }
-  | { type: "SET_FAVORITES"; favorites: unknown[] }
-  | { type: "SET_FAVORITES_LOADING"; loading: boolean }
   | { type: "SELECT_SKILL"; skill: EnrichedSkill }
   | { type: "PREVIEW_SKILL"; skill: EnrichedSkill }
   | { type: "CLEAR_SKILL" }

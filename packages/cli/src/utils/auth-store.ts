@@ -1,5 +1,9 @@
 import fs from "node:fs/promises";
-import { AUTH_DIR, AUTH_FILE } from "../constants.js";
+import path from "node:path";
+import os from "node:os";
+
+const AUTH_DIR = path.join(os.homedir(), ".skillsgate");
+const AUTH_FILE = path.join(os.homedir(), ".skillsgate", "auth.json");
 
 export interface StoredAuth {
   token: string;

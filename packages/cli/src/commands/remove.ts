@@ -8,7 +8,6 @@ import {
 } from "../core/installer.js";
 import { removeSkillFromLock } from "../core/skill-lock.js";
 import { fmt } from "../ui/format.js";
-import { trackRemove } from "../telemetry.js";
 
 interface RemoveOptions {
   global: boolean;
@@ -80,12 +79,6 @@ export async function runRemove(args: string[]): Promise<void> {
     await removeSkillFromLock(name);
     p.log.success(`Removed ${fmt.skillName(name)}`);
   }
-
-  trackRemove({
-    skills: toRemove,
-    agents: targetAgents.map((a) => a.name),
-    scope,
-  });
 
   p.outro(fmt.success(`Removed ${toRemove.length} skill(s).`));
 }

@@ -192,7 +192,7 @@ export async function runSetup(args: string[]): Promise<void> {
   }
 
   console.log();
-  p.log.info(`${pc.bold("CLI:")}  skillsgate search "seo"`);
+  p.log.info(`${pc.bold("CLI:")}  skillsgate add owner/repo`);
   p.log.info(`${pc.bold("MCP:")}  Ask your AI agent to "find a skill for PDF manipulation"`);
 
   p.outro(fmt.success("Done! MCP server configured."));

@@ -6,8 +6,6 @@ import {
   getOwnerRepo,
 } from "../../core/source-parser.js";
 import { cloneRepo, fetchTreeSha, cleanupTempDir } from "../../core/git.js";
-import { downloadSkill } from "../../core/skillsgate-client.js";
-import { getToken } from "../../utils/auth-store.js";
 import { discoverSkills, filterSkills } from "../../core/skill-discovery.js";
 import { installSkillForAgent, sanitizeName } from "../../core/installer.js";
 import {
@@ -22,12 +20,12 @@ import type { AgentConfig, InstallMethod, InstallScope } from "../../types.js";
 export function registerAdd(server: McpServer): void {
   server.tool(
     "skillsgate_add",
-    "Install AI agent skills from SkillsGate (@username/slug), GitHub (owner/repo), or a local path.",
+    "Install AI agent skills from GitHub (owner/repo) or a local path.",
     {
       source: z
         .string()
         .describe(
-          "Skill source: @username/slug (SkillsGate), owner/repo (GitHub), or a local path (./path).",
+          "Skill source: owner/repo (GitHub) or a local path (./path).",
         ),
       agents: z
         .array(z.string())
@@ -68,10 +66,6 @@ export function registerAdd(server: McpServer): void {
             return mcpError(`Local path does not exist: ${parsed.localPath}`);
           }
           skillDir = parsed.localPath!;
-        } else if (parsed.type === "skillsgate") {
-          const token = await getToken();
-          tmpDir = await downloadSkill(parsed.username!, parsed.slug!, token);
-          skillDir = tmpDir;
         } else {
           tmpDir = await cloneRepo(parsed);
           skillDir = tmpDir;
@@ -168,29 +162,18 @@ export function registerAdd(server: McpServer): void {
 
         // 7. Update lock file for global non-local installs
         if (scope === "global" && !isLocal) {
-          if (parsed.type === "skillsgate") {
-            for (const skill of skills) {
-              await addSkillToLock(sanitizeName(skill.name), {
-                source: `skillsgate:@${parsed.username}/${parsed.slug}`,
-                sourceType: "skillsgate",
-                originalUrl: `@${parsed.username}/${parsed.slug}`,
-                skillFolderHash: "",
-              });
-            }
-          } else {
-            for (const skill of skills) {
-              const sha = await fetchTreeSha(
-                parsed.owner,
-                parsed.repo,
-                sanitizeName(skill.name),
-              );
-              await addSkillToLock(sanitizeName(skill.name), {
-                source: `github:${getOwnerRepo(parsed)}`,
-                sourceType: "github",
-                originalUrl: source,
-                skillFolderHash: sha || "",
-              });
-            }
+          for (const skill of skills) {
+            const sha = await fetchTreeSha(
+              parsed.owner,
+              parsed.repo,
+              sanitizeName(skill.name),
+            );
+            await addSkillToLock(sanitizeName(skill.name), {
+              source: `github:${getOwnerRepo(parsed)}`,
+              sourceType: "github",
+              originalUrl: source,
+              skillFolderHash: sha || "",
+            });
           }
         }
 

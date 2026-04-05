@@ -1,7 +1,8 @@
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import open from "open";
-import { API_BASE_URL } from "../constants.js";
+const API_BASE_URL =
+  process.env.SKILLSGATE_API_URL ?? "https://skillsgate.ai";
 import { loadAuth, saveAuth } from "../utils/auth-store.js";
 
 interface ExchangeResponse {

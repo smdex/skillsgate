@@ -1,24 +1,11 @@
-import { useMemo, type ReactNode } from "react";
-import {
-	PublicApiClientProvider,
-	createPublicApiClient,
-} from "@skillsgate/ui";
-
-const API_BASE_URL = "https://api.skillsgate.ai";
+import type { ReactNode } from "react";
 
 /**
- * Wraps children with the public API client provider.
- * Place this inside the root layout so all pages can use shared components.
+ * Placeholder provider wrapper.
+ * Previously supplied the @skillsgate/ui PublicApiClientProvider;
+ * that dependency was removed with the backend. Kept as a pass-through
+ * so the root layout import stays valid.
  */
 export function UIProviders({ children }: { children: ReactNode }) {
-	const publicApiClient = useMemo(
-		() => createPublicApiClient({ baseUrl: API_BASE_URL }),
-		[],
-	);
-
-	return (
-		<PublicApiClientProvider value={publicApiClient}>
-			{children}
-		</PublicApiClientProvider>
-	);
+	return <>{children}</>;
 }

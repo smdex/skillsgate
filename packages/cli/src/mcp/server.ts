@@ -4,7 +4,6 @@ import { VERSION } from "../constants.js";
 import { registerWhoami } from "./tools/whoami.js";
 import { registerAuthStatus } from "./tools/auth-status.js";
 import { registerList } from "./tools/list.js";
-import { registerSearch } from "./tools/search.js";
 import { registerAdd } from "./tools/add.js";
 import { registerRemove } from "./tools/remove.js";
 import { registerUpdate } from "./tools/update.js";
@@ -24,8 +23,6 @@ export async function startMcpServer(): Promise<void> {
   registerWhoami(server);
   registerAuthStatus(server);
   registerList(server);
-  registerSearch(server);
-
   // Write tools
   registerAdd(server);
   registerRemove(server);

@@ -5,8 +5,6 @@ import {
   getOwnerRepo,
 } from "../core/source-parser.js";
 import { cloneRepo, fetchTreeSha, cleanupTempDir, GitCloneError } from "../core/git.js";
-import { downloadSkill, SkillsGateDownloadError } from "../core/skillsgate-client.js";
-import { getToken } from "../utils/auth-store.js";
 import { discoverSkills, filterSkills } from "../core/skill-discovery.js";
 import {
   installSkillForAgent,
@@ -38,7 +36,6 @@ import {
   InstallResult,
   AgentConfig,
 } from "../types.js";
-import { trackAdd } from "../telemetry.js";
 
 interface AddOptions {
   global: boolean;
@@ -77,13 +74,6 @@ export async function runAdd(args: string[]): Promise<void> {
         );
       }
       skillDir = parsed.localPath!;
-    } else if (parsed.type === "skillsgate") {
-      const spinner = p.spinner();
-      spinner.start(`Downloading ${sourceLabel} from SkillsGate...`);
-      const token = await getToken();
-      tmpDir = await downloadSkill(parsed.username!, parsed.slug!, token);
-      spinner.stop("Skill downloaded.");
-      skillDir = tmpDir;
     } else {
       const spinner = p.spinner();
       spinner.start(`Cloning ${sourceLabel}...`);
@@ -184,31 +174,20 @@ export async function runAdd(args: string[]): Promise<void> {
 
     installSpinner.stop("Installation complete.");
 
-    // Update lock file for global installs (GitHub and SkillsGate)
+    // Update lock file for global GitHub installs
     if (scope === "global" && !isLocal) {
-      if (parsed.type === "skillsgate") {
-        for (const skill of selectedSkills) {
-          await addSkillToLock(sanitizeName(skill.name), {
-            source: `skillsgate:@${parsed.username}/${parsed.slug}`,
-            sourceType: "skillsgate",
-            originalUrl: `@${parsed.username}/${parsed.slug}`,
-            skillFolderHash: "",
-          });
-        }
-      } else {
-        for (const skill of selectedSkills) {
-          const sha = await fetchTreeSha(
-            parsed.owner,
-            parsed.repo,
-            sanitizeName(skill.name),
-          );
-          await addSkillToLock(sanitizeName(skill.name), {
-            source: `github:${getOwnerRepo(parsed)}`,
-            sourceType: "github",
-            originalUrl: source,
-            skillFolderHash: sha || "",
-          });
-        }
+      for (const skill of selectedSkills) {
+        const sha = await fetchTreeSha(
+          parsed.owner,
+          parsed.repo,
+          sanitizeName(skill.name),
+        );
+        await addSkillToLock(sanitizeName(skill.name), {
+          source: `github:${getOwnerRepo(parsed)}`,
+          sourceType: "github",
+          originalUrl: source,
+          skillFolderHash: sha || "",
+        });
       }
     }
     if (scope === "global") {
@@ -242,14 +221,6 @@ export async function runAdd(args: string[]): Promise<void> {
       }
     }
 
-    trackAdd({
-      source: getOwnerRepo(parsed),
-      skills: selectedSkills.map((s) => sanitizeName(s.name)),
-      agents: selectedAgents.map((a) => a.name),
-      scope,
-      sourceType: parsed.type,
-    });
-
     p.outro(
       fmt.success(
         `Installed ${successes.length} skill(s) across ${selectedAgents.length} agent(s).`,
@@ -264,8 +235,6 @@ export async function runAdd(args: string[]): Promise<void> {
       } else {
         p.log.error(err.message);
       }
-    } else if (err instanceof SkillsGateDownloadError) {
-      p.log.error(err.message);
     } else if (err instanceof Error) {
       p.log.error(err.message);
     }

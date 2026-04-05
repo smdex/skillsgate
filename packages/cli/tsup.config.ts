@@ -8,7 +8,6 @@ export default defineConfig({
     "src/core/skill-lock.ts",
     "src/core/source-parser.ts",
     "src/core/git.ts",
-    "src/core/skillsgate-client.ts",
     "src/core/skills-sh-client.ts",
     "src/utils/auth-store.ts",
     "src/constants.ts",

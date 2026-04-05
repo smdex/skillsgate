@@ -2,8 +2,6 @@ import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { readSkillLock, addSkillToLock } from "../../core/skill-lock.js";
 import { fetchTreeSha, cloneRepo, cleanupTempDir } from "../../core/git.js";
-import { downloadSkill } from "../../core/skillsgate-client.js";
-import { getToken } from "../../utils/auth-store.js";
 import { parseSource } from "../../core/source-parser.js";
 import { discoverSkills } from "../../core/skill-discovery.js";
 import { installSkillForAgent, sanitizeName } from "../../core/installer.js";
@@ -63,73 +61,6 @@ export function registerUpdate(server: McpServer): void {
 
         for (const [, skills] of sourceGroups) {
           const entry0 = skills[0][1];
-
-          // SkillsGate-sourced: always re-download
-          if (entry0.sourceType === "skillsgate") {
-            for (const [n, entry] of skills) {
-              let tmpDir: string | undefined;
-              try {
-                const sgMatch = entry.originalUrl.match(
-                  /^@([^/]+)\/(.+)$/,
-                );
-                if (!sgMatch) {
-                  failed.push({
-                    name: n,
-                    error: `Invalid SkillsGate source: ${entry.originalUrl}`,
-                  });
-                  continue;
-                }
-                const [, sgUsername, sgSlug] = sgMatch;
-
-                const token = await getToken();
-                tmpDir = await downloadSkill(sgUsername, sgSlug, token);
-                const discovered = await discoverSkills(tmpDir);
-                const matched = discovered.filter(
-                  (s) => sanitizeName(s.name) === n,
-                );
-
-                if (matched.length === 0) {
-                  failed.push({
-                    name: n,
-                    error: "Skill no longer exists on SkillsGate.",
-                  });
-                  continue;
-                }
-
-                const detectedAgents = await detectInstalledAgents();
-                for (const skill of matched) {
-                  for (const agent of detectedAgents) {
-                    await installSkillForAgent(
-                      skill,
-                      agent,
-                      "global",
-                      "symlink",
-                    );
-                  }
-                }
-
-                await addSkillToLock(n, {
-                  source: entry.source,
-                  sourceType: entry.sourceType,
-                  originalUrl: entry.originalUrl,
-                  skillFolderHash: "",
-                });
-
-                updated.push({ name: n, source: entry.source });
-              } catch (err: unknown) {
-                failed.push({
-                  name: n,
-                  error:
-                    err instanceof Error
-                      ? err.message
-                      : "Update failed",
-                });
-              } finally {
-                if (tmpDir) await cleanupTempDir(tmpDir);
-              }
-            }
-            continue;
-          }
 
           // GitHub-sourced: hash-based update detection
           const parsed = parseSource(entry0.originalUrl);

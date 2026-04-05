@@ -1,19 +1,11 @@
-import { createHash } from "node:crypto";
 import path from "node:path";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   parseSource,
   getSourceLabel,
-  getOwnerRepo,
 } from "../../core/source-parser.js";
 import { cloneRepo, cleanupTempDir } from "../../core/git.js";
-import {
-  downloadSkill,
-  submitScanReport,
-  fetchScanSummary,
-} from "../../core/skillsgate-client.js";
-import { getToken } from "../../utils/auth-store.js";
 import { discoverSkills, filterSkills } from "../../core/skill-discovery.js";
 import { dirExists } from "../../utils/fs.js";
 import {
@@ -25,7 +17,7 @@ import {
   invokeScanner,
   detectCreditsExhausted,
 } from "../../core/scanners.js";
-import type { ScannerConfig, ScannerType, ScanSummary } from "../../types.js";
+import type { ScannerConfig, ScannerType } from "../../types.js";
 import { mcpSuccess, mcpError } from "../helpers.js";
 
 export function registerScan(server: McpServer): void {
@@ -48,12 +40,8 @@ export function registerScan(server: McpServer): void {
         .number()
         .default(120)
         .describe("Scanner timeout in seconds (default 120)."),
-      share: z
-        .boolean()
-        .default(true)
-        .describe("Share scan results with the SkillsGate community (default true)."),
     },
-    async ({ source, scanner: scannerName, timeout, share }) => {
+    async ({ source, scanner: scannerName, timeout }) => {
       let tmpDir: string | undefined;
 
       try {
@@ -70,10 +58,6 @@ export function registerScan(server: McpServer): void {
             );
           }
           skillDir = parsed.localPath!;
-        } else if (parsed.type === "skillsgate") {
-          const token = await getToken();
-          tmpDir = await downloadSkill(parsed.username!, parsed.slug!, token);
-          skillDir = tmpDir;
         } else {
           tmpDir = await cloneRepo(parsed);
           skillDir = tmpDir;
@@ -98,27 +82,7 @@ export function registerScan(server: McpServer): void {
           }
         }
 
-        // 3. Build source ID
-        let sourceId: string;
-        if (parsed.type === "github") {
-          const ownerRepo = getOwnerRepo(parsed);
-          const subpath = parsed.subpath || "";
-          sourceId = `github:${ownerRepo}:${subpath}`;
-        } else if (parsed.type === "skillsgate") {
-          sourceId = `skillsgate:${parsed.username}/${parsed.slug}`;
-        } else {
-          sourceId = `local:${parsed.localPath}`;
-        }
-
-        // 4. Fetch community scan summary
-        let communitySummary: ScanSummary | null = null;
-        try {
-          communitySummary = await fetchScanSummary(sourceId);
-        } catch {
-          // Silent on failure
-        }
-
-        // 5. Detect available scanners
+        // 3. Detect available scanners
         const insideScanner = detectInsideScanner();
         const available = await detectAvailableScanners();
         const filtered = filterInsideScanner(available, insideScanner);
@@ -214,36 +178,11 @@ export function registerScan(server: McpServer): void {
             report: null,
             parseFailed: true,
             rawOutput: result.stdout.slice(0, 2000),
-            communitySummary,
             durationMs,
           });
         }
 
-        // 12. Share results if enabled
-        let shared = false;
-
-        if (share && report) {
-          const token = await getToken();
-          if (token) {
-            const contentHash = createHash("sha256")
-              .update(skills.map((s) => s.content).join(""))
-              .digest("hex");
-
-            shared = await submitScanReport(
-              {
-                sourceId,
-                contentHash,
-                scannerType: selectedScanner.name,
-                risk: report.risk,
-                summary: report.summary,
-                findings: report.findings,
-              },
-              token,
-            );
-          }
-        }
-
-        // 13. Return result
+        // 12. Return result
         return mcpSuccess({
           scanner: selectedScanner.name,
           report: {
@@ -251,8 +190,6 @@ export function registerScan(server: McpServer): void {
             summary: report.summary,
             findings: report.findings,
           },
-          communitySummary,
-          shared,
           durationMs,
         });
       } catch (err: unknown) {
