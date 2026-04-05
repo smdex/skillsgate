@@ -232,71 +232,6 @@ async function writeSkillLock(lock: SkillLockFile): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Auth (mirrors packages/cli/src/utils/auth-store.ts and constants.ts)
-// ---------------------------------------------------------------------------
-
-const API_BASE_URL = process.env.SKILLSGATE_API_URL ?? "https://skillsgate.ai"
-const AUTH_DIR = path.join(home, ".skillsgate")
-const AUTH_FILE_PATH = path.join(home, ".skillsgate", "auth.json")
-
-interface StoredAuth {
-  token: string
-  user: {
-    id: string
-    name: string
-    email: string
-    image?: string
-  }
-}
-
-interface ExchangeResponse {
-  access_token: string
-  user: { id: string; name: string; email: string; image?: string }
-}
-
-// Auth stored in shared SQLite (syncs with TUI)
-const AUTH_TOKEN_KEY = "auth.token"
-const AUTH_USER_KEY = "auth.user"
-
-function loadAuth(): StoredAuth | null {
-  try {
-    const token = settingsStore?.get<string | null>(AUTH_TOKEN_KEY, null)
-    const user = settingsStore?.get<StoredAuth["user"] | null>(AUTH_USER_KEY, null)
-    if (token && user) return { token, user }
-
-    // Fallback: try legacy file-based auth and migrate
-    try {
-      const raw = require("fs").readFileSync(AUTH_FILE_PATH, "utf-8")
-      const data = JSON.parse(raw) as StoredAuth
-      if (data.user && data.token) {
-        // Migrate to SQLite
-        settingsStore?.set(AUTH_TOKEN_KEY, data.token)
-        settingsStore?.set(AUTH_USER_KEY, data.user)
-        return data
-      }
-    } catch {}
-
-    return null
-  } catch {
-    return null
-  }
-}
-
-function saveAuthToDb(data: StoredAuth): void {
-  settingsStore?.set(AUTH_TOKEN_KEY, data.token)
-  settingsStore?.set(AUTH_USER_KEY, data.user)
-  // Also write legacy file for CLI compatibility
-  require("fs").mkdirSync(AUTH_DIR, { recursive: true })
-  require("fs").writeFileSync(AUTH_FILE_PATH, JSON.stringify(data, null, 2), "utf-8")
-}
-
-function clearAuthFromDb(): void {
-  settingsStore?.set(AUTH_TOKEN_KEY, null)
-  settingsStore?.set(AUTH_USER_KEY, null)
-  try { require("fs").unlinkSync(AUTH_FILE_PATH) } catch {}
-}
-
-// ---------------------------------------------------------------------------
 // SKILL.md parsing
 // ---------------------------------------------------------------------------
 
@@ -1424,63 +1359,6 @@ Add your skill instructions here.
 
     if (tmpDir) {
       await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {})
-    }
-  })
-
-  // -------------------------------------------------------------------------
-  // Auth handlers
-  // -------------------------------------------------------------------------
-
-  // Load stored auth (shared with CLI)
-  ipcMain.handle("auth:load", async () => {
-    return loadAuth()
-  })
-
-  // Exchange a device code for an access token
-  ipcMain.handle("auth:exchange", async (_event, code: string) => {
-    const res = await fetch(`${API_BASE_URL}/api/auth/device/exchange`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code }),
-    })
-
-    if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string }
-      const errorMsg =
-        data?.error === "rate_limited"
-          ? "Too many attempts. Wait a minute and try again."
-          : data?.error === "invalid_code"
-            ? "Invalid code. Check and try again."
-            : data?.error === "expired"
-              ? "Code has expired. Get a new one."
-              : "Verification failed. Please try again."
-      throw new Error(errorMsg)
-    }
-
-    const result = (await res.json()) as ExchangeResponse
-    const stored: StoredAuth = {
-      token: result.access_token,
-      user: result.user,
-    }
-    saveAuthToDb(stored)
-    return stored
-  })
-
-  // Logout
-  ipcMain.handle("auth:logout", async () => {
-    clearAuthFromDb()
-  })
-
-  // Open a URL in the default browser (only https)
-  ipcMain.handle("auth:open-browser", async (_event, url: string) => {
-    try {
-      const parsed = new URL(url)
-      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-        throw new Error("Only http/https URLs are allowed")
-      }
-      await shell.openExternal(url)
-    } catch (err) {
-      throw new Error(`Invalid URL: ${err instanceof Error ? err.message : String(err)}`)
     }
   })
 

@@ -38,12 +38,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   addToAgent: (skillName: string, canonicalPath: string, agentName: string) =>
     ipcRenderer.invoke("skills:add-to-agent", skillName, canonicalPath, agentName),
 
-  // Auth
-  authLoad: () => ipcRenderer.invoke("auth:load"),
-  authExchange: (code: string) => ipcRenderer.invoke("auth:exchange", code),
-  authLogout: () => ipcRenderer.invoke("auth:logout"),
-  authOpenBrowser: (url: string) => ipcRenderer.invoke("auth:open-browser", url),
-
   // Remote servers
   serversList: () => ipcRenderer.invoke("servers:list"),
   serversCreate: (data: {
