@@ -1033,8 +1033,8 @@ function RightPanel({ skill, content, contentLoading, collections, onContentSave
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-background">
-      <div className="flex-1 overflow-y-auto">
-        <div className="px-8 py-6">
+      <div className={`flex-1 ${editMode ? "flex flex-col overflow-hidden" : "overflow-y-auto"}`}>
+        <div className={`px-8 py-6 ${editMode ? "flex flex-col flex-1 min-h-0" : ""}`}>
           {/* Header */}
           <div className="mb-6">
             <div className="flex items-start justify-between gap-3 mb-2">
@@ -1157,13 +1157,15 @@ function RightPanel({ skill, content, contentLoading, collections, onContentSave
 
           {/* Content: View or Edit mode */}
           {editMode ? (
-            <div className="flex flex-col gap-3">
-              <SkillEditor
-                content={editContent}
-                onChange={setEditContent}
-                onSave={handleSave}
-              />
-              <div className="flex items-center gap-2 justify-end">
+            <div className="flex flex-col flex-1 min-h-0">
+              <div className="flex-1 min-h-0">
+                <SkillEditor
+                  content={editContent}
+                  onChange={setEditContent}
+                  onSave={handleSave}
+                />
+              </div>
+              <div className="flex items-center gap-2 justify-end py-3 flex-shrink-0">
                 {saveStatus === "saved" && (
                   <span className="text-[12px] text-green-500 mr-2">Saved</span>
                 )}
