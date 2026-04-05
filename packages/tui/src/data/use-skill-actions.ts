@@ -20,8 +20,6 @@ import {
   removeSkillFromLock,
 } from "../../../cli/src/core/skill-lock.js"
 import { agents, detectInstalledAgents } from "../../../cli/src/core/agents.js"
-import { downloadSkill } from "../../../cli/src/core/skillsgate-client.js"
-import { getToken } from "../../../cli/src/utils/auth-store.js"
 import type { Skill, AgentConfig } from "../../../cli/src/types.js"
 
 interface UseSkillActionsResult {
@@ -43,7 +41,6 @@ export function useSkillActions(): UseSkillActionsResult {
   /**
    * Install a skill from its source.
    * For public skills (with a source in owner/repo format), runs `npx skills add`.
-   * For private skills, uses the existing download flow.
    */
   const installSkill = useCallback(async (skill: EnrichedSkill) => {
     dispatch({
@@ -73,7 +70,6 @@ export function useSkillActions(): UseSkillActionsResult {
         return
       }
 
-      // Private skills: use the existing download flow
       const installedAgents = await detectInstalledAgents()
       if (installedAgents.length === 0) {
         dispatch({
@@ -98,15 +94,8 @@ export function useSkillActions(): UseSkillActionsResult {
         preferredNames.includes(agent.name),
       )
 
-      let tmpDir: string
-      if (source.type === "skillsgate") {
-        // Download from private API
-        const token = await getToken()
-        tmpDir = await downloadSkill(source.username!, source.slug!, token)
-      } else {
-        // Local path -- use directly
-        tmpDir = source.localPath!
-      }
+      // Local path source uses resolved path directly
+      const tmpDir = source.localPath!
 
       try {
         // Discover skills in the downloaded directory
@@ -277,7 +266,6 @@ export function useSkillActions(): UseSkillActionsResult {
   /**
    * Update a skill by re-fetching from its source.
    * For GitHub skills: checks tree SHA for changes before re-installing.
-   * For SkillsGate skills: always re-downloads.
    */
   const updateSkill = useCallback(async (skill: EnrichedSkill) => {
     if (!skill.lock) {
