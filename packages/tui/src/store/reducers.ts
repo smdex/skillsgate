@@ -5,7 +5,6 @@ const FOCUS_ORDER: FocusedPane[] = ["agents", "search", "list"]
 export const initialState: AppState = {
   activeView: "home",
   previousView: null,
-  auth: null,
   detectedAgents: [],
   selectedAgentFilter: "all",
   installedSkills: [],
@@ -14,8 +13,6 @@ export const initialState: AppState = {
   searchQuery: "",
   searchResults: [],
   searchLoading: false,
-  favorites: [],
-  favoritesLoading: false,
   selectedSkill: null,
   selectedServerId: null,
   showHelp: false,
@@ -39,9 +36,6 @@ export function appReducer(state: AppState, action: Action): AppState {
         activeView: state.previousView,
         previousView: null,
       }
-
-    case "SET_AUTH":
-      return { ...state, auth: action.auth }
 
     case "SET_DETECTED_AGENTS":
       return { ...state, detectedAgents: action.agents }
@@ -75,12 +69,6 @@ export function appReducer(state: AppState, action: Action): AppState {
 
     case "SET_SEARCH_LOADING":
       return { ...state, searchLoading: action.loading }
-
-    case "SET_FAVORITES":
-      return { ...state, favorites: action.favorites, favoritesLoading: false }
-
-    case "SET_FAVORITES_LOADING":
-      return { ...state, favoritesLoading: action.loading }
 
     case "SELECT_SKILL":
       return {
