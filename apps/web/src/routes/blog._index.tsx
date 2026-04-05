@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import type { MetaFunction } from "react-router";
 import { Navbar } from "~/components/navbar";
-import { publicApi } from "~/lib/api";
 
 export const meta: MetaFunction = () => [
 	{ title: "Blog — SkillsGate" },
@@ -53,30 +52,14 @@ export default function BlogListPage() {
 	const limit = 10;
 
 	useEffect(() => {
-		setIsLoading(true);
-		publicApi
-			.get<BlogListResponse>(`/api/blog?limit=${limit}&offset=0`)
-			.then((res) => {
-				if (res.ok) {
-					setPosts(res.data.posts);
-					setHasMore(res.data.meta.hasMore);
-					setOffset(res.data.posts.length);
-				}
-			})
-			.finally(() => setIsLoading(false));
+		// TODO: Rewire to new blog data source
+		setIsLoading(false);
+		setPosts([]);
+		setHasMore(false);
 	}, []);
 
 	async function loadMore() {
-		setLoadingMore(true);
-		const res = await publicApi.get<BlogListResponse>(
-			`/api/blog?limit=${limit}&offset=${offset}`
-		);
-		if (res.ok) {
-			setPosts((prev) => [...prev, ...res.data.posts]);
-			setHasMore(res.data.meta.hasMore);
-			setOffset((prev) => prev + res.data.posts.length);
-		}
-		setLoadingMore(false);
+		// TODO: Rewire to new blog data source
 	}
 
 	return (

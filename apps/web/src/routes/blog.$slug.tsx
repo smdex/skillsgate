@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from "react";
 import { useParams, Link } from "react-router";
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { Navbar } from "~/components/navbar";
-import { publicApi } from "~/lib/api";
 import { marked } from "marked";
 
 // ─── Types ──────────────────────────────────────────────────────────
@@ -37,22 +36,7 @@ type BlogPostMeta = {
 // ─── Loader (server-side for SEO meta) ──────────────────────────────
 
 export async function loader({ params }: LoaderFunctionArgs) {
-	const slug = params.slug;
-	if (!slug) return { post: null };
-
-	try {
-		const res = await publicApi.get<BlogPostResponse>(
-			`/api/blog/${encodeURIComponent(slug)}`
-		);
-		if (res.ok) {
-			const { title, description, coverImage, author, slug: postSlug, publishedAt } = res.data.post;
-			return {
-				post: { title, description, coverImage, author, slug: postSlug, publishedAt } as BlogPostMeta,
-			};
-		}
-	} catch {
-		// fall through
-	}
+	// TODO: Rewire to new blog data source
 	return { post: null };
 }
 
@@ -130,27 +114,9 @@ export default function BlogPostPage() {
 
 	useEffect(() => {
 		if (!slug) return;
-
-		setIsLoading(true);
-		setError(null);
-
-		publicApi
-			.get<BlogPostResponse>(`/api/blog/${encodeURIComponent(slug)}`)
-			.then((res) => {
-				if (res.ok) {
-					setPost(res.data.post);
-				} else if (res.status === 404) {
-					setError("Post not found");
-				} else {
-					setError(res.error || "Failed to load post");
-				}
-			})
-			.catch(() => {
-				setError("Failed to load post");
-			})
-			.finally(() => {
-				setIsLoading(false);
-			});
+		// TODO: Rewire to new blog data source
+		setIsLoading(false);
+		setError("Blog is being migrated. Check back soon.");
 	}, [slug]);
 
 	const renderedHtml = useMemo(() => {

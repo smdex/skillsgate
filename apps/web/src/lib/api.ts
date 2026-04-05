@@ -1,3 +1,6 @@
+// TODO: Rewire to new blog API when ready.
+// Blog endpoints are currently stubbed — pages render empty state.
+
 const API_BASE_URL = "https://api.skillsgate.ai";
 
 type RequestOptions = {
