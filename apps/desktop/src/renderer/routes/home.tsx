@@ -362,7 +362,9 @@ function LeftSidebar({
 // Virtualized Skill List Row
 // --------------------------------------------------------------------------
 
-interface SkillListRowData {
+interface SkillRowProps {
+  index: number
+  style: React.CSSProperties
   skills: InstalledSkill[]
   multiSelected: Set<string>
   isMultiSelectActive: boolean
@@ -377,24 +379,18 @@ interface SkillListRowData {
 const SkillListRow = memo(function SkillListRow({
   index,
   style,
-  data,
-}: {
-  index: number
-  style: React.CSSProperties
-  data: SkillListRowData
-}) {
-  const {
-    skills,
-    multiSelected,
-    isMultiSelectActive,
-    selectedSkillName,
-    dragSkill,
-    onSelectSkill,
-    onMultiSelectToggle,
-    onDragSkillStart,
-    onDragSkillEnd,
-  } = data
+  skills,
+  multiSelected,
+  isMultiSelectActive,
+  selectedSkillName,
+  dragSkill,
+  onSelectSkill,
+  onMultiSelectToggle,
+  onDragSkillStart,
+  onDragSkillEnd,
+}: SkillRowProps) {
   const skill = skills[index]
+  if (!skill) return null
   const isMultiChecked = multiSelected.has(skill.canonicalPath)
 
   return (
@@ -513,18 +509,6 @@ function MiddlePanel({
   const [showCollectionDropdown, setShowCollectionDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const isMultiSelectActive = multiSelected.size > 0
-  const [listHeight, setListHeight] = useState(600)
-
-  // Track container height for virtualized list
-  useEffect(() => {
-    const el = listRef.current
-    if (!el) return
-    const observer = new ResizeObserver(([entry]) => {
-      setListHeight(entry.contentRect.height)
-    })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -603,7 +587,7 @@ function MiddlePanel({
       </div>
 
       {/* Scrollable skill list */}
-      <div className={`flex-1 overflow-hidden px-2 ${isMultiSelectActive ? "pb-14" : "pb-2"}`} ref={listRef} tabIndex={-1}>
+      <div className={`flex-1 min-h-0 flex flex-col px-2 ${isMultiSelectActive ? "pb-14" : "pb-2"}`} ref={listRef} tabIndex={-1}>
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <p className="text-[12px] text-muted animate-fade-in">
@@ -638,11 +622,10 @@ function MiddlePanel({
           </div>
         ) : (
           <List
-            height={listHeight}
-            itemCount={filteredSkills.length}
-            itemSize={36}
-            width="100%"
-            itemData={{
+            rowCount={filteredSkills.length}
+            rowHeight={36}
+            rowComponent={SkillListRow}
+            rowProps={{
               skills: filteredSkills,
               multiSelected,
               isMultiSelectActive,
@@ -654,9 +637,7 @@ function MiddlePanel({
               onDragSkillEnd,
             }}
             overscanCount={10}
-          >
-            {SkillListRow}
-          </List>
+          />
         )}
       </div>
 
