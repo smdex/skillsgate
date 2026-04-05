@@ -8,18 +8,9 @@
   ],
   "scripts": {
     "dev": "npm run dev -w apps/web",
-    "build": "npm run generate -w @skillsgate/database && npm run build -w apps/web",
+    "build": "npm run build -w apps/web",
     "deploy": "npm run deploy -w apps/web",
-    "preview": "npm run preview -w apps/web",
-    "db:generate": "npm run generate -w @skillsgate/database",
-    "db:migrate:dev": "npm run migrate:dev -w @skillsgate/database",
-    "db:migrate:deploy": "npm run migrate:deploy -w @skillsgate/database",
-    "db:push": "npm run db:push -w @skillsgate/database",
-    "db:studio": "npm run studio -w @skillsgate/database",
-    "seed:vectors:build": "npx esbuild ../scripts/seed-vector-db.ts --bundle --platform=node --format=cjs --tsconfig=../scripts/tsconfig.json --outdir=.tmp/seed --packages=external \"--define:import.meta.url=__import_meta_url\" \"--banner:js=var __import_meta_url = require('url').pathToFileURL(__filename).href;\"",
-    "seed:vectors": "npm run seed:vectors:build && node .tmp/seed/seed-vector-db.js",
-    "find-skill:build": "npx esbuild ../scripts/find-skill.ts --bundle --platform=node --format=cjs --tsconfig=../scripts/tsconfig.json --outdir=.tmp/find-skill --packages=external \"--define:import.meta.url=__import_meta_url\" \"--banner:js=var __import_meta_url = require('url').pathToFileURL(__filename).href;\"",
-    "find-skill": "npm run find-skill:build && node .tmp/find-skill/find-skill.js"
+    "preview": "npm run preview -w apps/web"
   },
   "optionalDependencies": {
     "@ast-grep/napi-linux-x64-gnu": "0.40.5",
