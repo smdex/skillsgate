@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo, useCallback, useRef } from "react"
+import { useEffect, useState, useMemo, useCallback, useRef, memo } from "react"
+import { FixedSizeList } from "react-window"
 import { marked } from "marked"
 import { electronAPI } from "../lib/electron-api"
 import { SkillEditor } from "../components/skill-editor"
@@ -108,6 +109,11 @@ function renderMarkdown(raw: string): string {
   }
   return sanitizeHtml(marked.parse(content) as string)
 }
+
+const MemoizedMarkdown = memo(function MemoizedMarkdown({ content }: { content: string }) {
+  const html = useMemo(() => renderMarkdown(content), [content])
+  return <div className="skill-prose" dangerouslySetInnerHTML={{ __html: html }} />
+})
 
 interface DragSkillPayload {
   name: string
@@ -353,6 +359,103 @@ function LeftSidebar({
 }
 
 // --------------------------------------------------------------------------
+// Virtualized Skill List Row
+// --------------------------------------------------------------------------
+
+interface SkillListRowData {
+  skills: InstalledSkill[]
+  multiSelected: Set<string>
+  isMultiSelectActive: boolean
+  selectedSkillName: string | null
+  dragSkill: DragSkillPayload | null
+  onSelectSkill: (skill: InstalledSkill) => void
+  onMultiSelectToggle: (skill: InstalledSkill, e: React.MouseEvent) => void
+  onDragSkillStart: (skill: InstalledSkill) => void
+  onDragSkillEnd: () => void
+}
+
+const SkillListRow = memo(function SkillListRow({
+  index,
+  style,
+  data,
+}: {
+  index: number
+  style: React.CSSProperties
+  data: SkillListRowData
+}) {
+  const {
+    skills,
+    multiSelected,
+    isMultiSelectActive,
+    selectedSkillName,
+    dragSkill,
+    onSelectSkill,
+    onMultiSelectToggle,
+    onDragSkillStart,
+    onDragSkillEnd,
+  } = data
+  const skill = skills[index]
+  const isMultiChecked = multiSelected.has(skill.canonicalPath)
+
+  return (
+    <div style={style} className="px-0.5">
+      <button
+        onClick={(e) => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || isMultiSelectActive) {
+            onMultiSelectToggle(skill, e)
+          } else {
+            onSelectSkill(skill)
+          }
+        }}
+        draggable={!isMultiSelectActive}
+        onDragStart={(e) => {
+          if (isMultiSelectActive) {
+            e.preventDefault()
+            return
+          }
+          e.dataTransfer.effectAllowed = "move"
+          onDragSkillStart(skill)
+        }}
+        onDragEnd={() => onDragSkillEnd()}
+        className={`flex items-center w-full px-2.5 py-2 rounded-md text-left transition-colors ${
+          isMultiChecked
+            ? "bg-accent/10 text-foreground ring-1 ring-accent/30"
+            : selectedSkillName === skill.name && !isMultiSelectActive
+              ? "bg-surface-hover text-foreground"
+              : dragSkill?.canonicalPath === skill.canonicalPath
+                ? "opacity-60 ring-1 ring-accent/40"
+                : "text-muted hover:text-foreground hover:bg-surface-hover"
+        }`}
+      >
+        {isMultiSelectActive && (
+          <span className="flex-shrink-0 mr-2">
+            <span
+              className={`inline-flex items-center justify-center w-4 h-4 rounded border transition-colors ${
+                isMultiChecked
+                  ? "bg-accent border-accent text-white"
+                  : "border-border bg-surface"
+              }`}
+            >
+              {isMultiChecked && (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
+            </span>
+          </span>
+        )}
+        <span className="text-[12px] font-medium truncate flex-1 min-w-0">
+          {skill.name}
+        </span>
+        <span className="ml-2 flex-shrink-0">
+          <AgentLogoRow agents={skill.agents} size={14} />
+        </span>
+      </button>
+    </div>
+  )
+})
+
+// --------------------------------------------------------------------------
 // Middle Skill List Panel
 // --------------------------------------------------------------------------
 
@@ -410,6 +513,18 @@ function MiddlePanel({
   const [showCollectionDropdown, setShowCollectionDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const isMultiSelectActive = multiSelected.size > 0
+  const [listHeight, setListHeight] = useState(600)
+
+  // Track container height for virtualized list
+  useEffect(() => {
+    const el = listRef.current
+    if (!el) return
+    const observer = new ResizeObserver(([entry]) => {
+      setListHeight(entry.contentRect.height)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -488,7 +603,7 @@ function MiddlePanel({
       </div>
 
       {/* Scrollable skill list */}
-      <div className={`flex-1 overflow-y-auto px-2 ${isMultiSelectActive ? "pb-14" : "pb-2"}`} ref={listRef} tabIndex={-1}>
+      <div className={`flex-1 overflow-hidden px-2 ${isMultiSelectActive ? "pb-14" : "pb-2"}`} ref={listRef} tabIndex={-1}>
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <p className="text-[12px] text-muted animate-fade-in">
@@ -522,70 +637,26 @@ function MiddlePanel({
             )}
           </div>
         ) : (
-          <div className="flex flex-col gap-0.5">
-            {filteredSkills.map((skill) => {
-              const isMultiChecked = multiSelected.has(skill.canonicalPath)
-              return (
-                <button
-                  key={skill.canonicalPath}
-                  onClick={(e) => {
-                    if (e.metaKey || e.ctrlKey || e.shiftKey) {
-                      onMultiSelectToggle(skill, e)
-                    } else if (isMultiSelectActive) {
-                      // When multi-select is active, plain click toggles selection
-                      onMultiSelectToggle(skill, e)
-                    } else {
-                      onSelectSkill(skill)
-                    }
-                  }}
-                  draggable={!isMultiSelectActive}
-                  onDragStart={(e) => {
-                    if (isMultiSelectActive) {
-                      e.preventDefault()
-                      return
-                    }
-                    e.dataTransfer.effectAllowed = "move"
-                    onDragSkillStart(skill)
-                  }}
-                  onDragEnd={() => onDragSkillEnd()}
-                  className={`flex items-center w-full px-2.5 py-2 rounded-md text-left transition-colors ${
-                    isMultiChecked
-                      ? "bg-accent/10 text-foreground ring-1 ring-accent/30"
-                      : selectedSkillName === skill.name && !isMultiSelectActive
-                        ? "bg-surface-hover text-foreground"
-                        : dragSkill?.canonicalPath === skill.canonicalPath
-                          ? "opacity-60 ring-1 ring-accent/40"
-                          : "text-muted hover:text-foreground hover:bg-surface-hover"
-                  }`}
-                >
-                  {/* Checkbox shown when multi-select is active */}
-                  {isMultiSelectActive && (
-                    <span className="flex-shrink-0 mr-2">
-                      <span
-                        className={`inline-flex items-center justify-center w-4 h-4 rounded border transition-colors ${
-                          isMultiChecked
-                            ? "bg-accent border-accent text-white"
-                            : "border-border bg-surface"
-                        }`}
-                      >
-                        {isMultiChecked && (
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        )}
-                      </span>
-                    </span>
-                  )}
-                  <span className="text-[12px] font-medium truncate flex-1 min-w-0">
-                    {skill.name}
-                  </span>
-                  <span className="ml-2 flex-shrink-0">
-                    <AgentLogoRow agents={skill.agents} size={14} />
-                  </span>
-                </button>
-              )
-            })}
-          </div>
+          <FixedSizeList
+            height={listHeight}
+            itemCount={filteredSkills.length}
+            itemSize={36}
+            width="100%"
+            itemData={{
+              skills: filteredSkills,
+              multiSelected,
+              isMultiSelectActive,
+              selectedSkillName,
+              dragSkill,
+              onSelectSkill,
+              onMultiSelectToggle,
+              onDragSkillStart,
+              onDragSkillEnd,
+            }}
+            overscanCount={10}
+          >
+            {SkillListRow}
+          </FixedSizeList>
         )}
       </div>
 
@@ -1136,10 +1207,7 @@ function RightPanel({ skill, content, contentLoading, collections, onContentSave
           ) : contentLoading ? (
             <p className="text-sm text-muted animate-fade-in">Loading content...</p>
           ) : content ? (
-            <div
-              className="skill-prose"
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
-            />
+            <MemoizedMarkdown content={content} />
           ) : (
             <p className="text-sm text-muted">
               Skill content not available. This skill may not have a SKILL.md file.

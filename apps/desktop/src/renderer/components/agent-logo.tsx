@@ -1,3 +1,4 @@
+import { memo } from "react"
 import ampLogo from "../assets/agent-logos/amp.svg"
 import claudeLogo from "../assets/agent-logos/claude.svg"
 import codexLogo from "../assets/agent-logos/codex.svg"
@@ -74,7 +75,7 @@ interface AgentLogoProps {
   className?: string
 }
 
-export function AgentLogo({ name, size = 16, shortCode, className = "" }: AgentLogoProps) {
+export const AgentLogo = memo(function AgentLogo({ name, size = 16, shortCode, className = "" }: AgentLogoProps) {
   const key = getAgentKey(name)
   const logo = AGENT_LOGOS[key]
 
@@ -113,9 +114,9 @@ export function AgentLogo({ name, size = 16, shortCode, className = "" }: AgentL
       {letters}
     </span>
   )
-}
+})
 
-export function AgentLogoRow({ agents, size = 14 }: { agents: string[]; size?: number }) {
+export const AgentLogoRow = memo(function AgentLogoRow({ agents, size = 14 }: { agents: string[]; size?: number }) {
   return (
     <span className="flex items-center gap-1">
       {agents.map((agent) => (
@@ -123,4 +124,4 @@ export function AgentLogoRow({ agents, size = 14 }: { agents: string[]; size?: n
       ))}
     </span>
   )
-}
+})
