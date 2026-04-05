@@ -221,6 +221,108 @@ function SkillCard({ skill, onSelect, installedNames }: SkillCardProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Agent Dropdown (multi-select for install targets)
+// ---------------------------------------------------------------------------
+
+interface DetectedAgent {
+  name: string
+  displayName: string
+}
+
+function AgentDropdown({
+  agents,
+  selected,
+  defaults,
+  onToggle,
+}: {
+  agents: DetectedAgent[]
+  selected: string[]
+  defaults: string[]
+  onToggle: (name: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [])
+
+  const label =
+    selected.length === 0
+      ? "No agents selected"
+      : selected.length === agents.length
+        ? `All agents (${agents.length})`
+        : `${selected.length} agent${selected.length > 1 ? "s" : ""} selected`
+
+  return (
+    <div ref={ref} className="relative">
+      <p className="text-[12px] font-medium text-foreground mb-2">
+        Install targets
+      </p>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-[12px] text-foreground hover:border-accent/30 transition-colors"
+      >
+        <span>{label}</span>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={`text-muted transition-transform ${open ? "rotate-180" : ""}`}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-background shadow-lg overflow-hidden">
+          <div className="max-h-48 overflow-y-auto py-1">
+            {agents.map((agent) => (
+              <button
+                key={agent.name}
+                type="button"
+                onClick={() => onToggle(agent.name)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-foreground hover:bg-surface-hover transition-colors"
+              >
+                <span
+                  className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                    selected.includes(agent.name)
+                      ? "bg-accent border-accent text-background"
+                      : "border-border"
+                  }`}
+                >
+                  {selected.includes(agent.name) && (
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </span>
+                <span>{agent.displayName}</span>
+                {defaults.includes(agent.name) && (
+                  <span className="ml-auto text-[10px] text-muted">default</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Skill Detail Panel (slide-over from the right)
 // ---------------------------------------------------------------------------
 
@@ -245,7 +347,6 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
   // Fetch SKILL.md content from GitHub raw
   useEffect(() => {
     let cancelled = false
-    const controller = new AbortController()
     setLoading(true)
     setContent(null)
 
@@ -264,7 +365,6 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
 
     return () => {
       cancelled = true
-      controller.abort()
     }
   }, [skill.source, skill.skillId])
 
@@ -397,29 +497,12 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
             </div>
 
             {!installed && availableAgents.length > 0 && (
-              <div>
-                <p className="text-[12px] font-medium text-foreground mb-2">
-                  Install targets
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {availableAgents.map((agent) => (
-                    <label
-                      key={agent.name}
-                      className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-[12px] text-foreground"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedAgents.includes(agent.name)}
-                        onChange={() => toggleAgent(agent.name)}
-                      />
-                      <span>{agent.displayName}</span>
-                      {defaultAgents.includes(agent.name) && (
-                        <span className="ml-auto text-[10px] text-muted">default</span>
-                      )}
-                    </label>
-                  ))}
-                </div>
-              </div>
+              <AgentDropdown
+                agents={availableAgents}
+                selected={selectedAgents}
+                defaults={defaultAgents}
+                onToggle={toggleAgent}
+              />
             )}
           </div>
 
@@ -606,7 +689,7 @@ export function Discover() {
         </div>
 
         {/* Results count when searching */}
-        {searchQuery.trim() && !searching && (
+        {searchQuery.trim() && !loading && (
           <p className="mt-2 text-[11px] text-muted font-mono">
             {skills.length} result{skills.length !== 1 ? "s" : ""} for "{searchQuery.trim()}"
           </p>

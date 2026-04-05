@@ -666,21 +666,29 @@ function MiddlePanel({
 
 function BulkDeleteDialog({
   count,
+  selectedAgent,
   onConfirm,
+  onRemoveFromAgent,
   onCancel,
 }: {
   count: number
+  selectedAgent: string | null
   onConfirm: () => void
+  onRemoveFromAgent: () => void
   onCancel: () => void
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-surface border border-border rounded-xl shadow-lg w-full max-w-sm mx-4 p-5 animate-slide-down">
         <h2 className="text-[14px] font-semibold text-foreground mb-1">
-          Delete {count} skill{count !== 1 ? "s" : ""}?
+          {selectedAgent
+            ? `Remove ${count} skill${count !== 1 ? "s" : ""} from ${selectedAgent}?`
+            : `Delete ${count} skill${count !== 1 ? "s" : ""}?`}
         </h2>
         <p className="text-[12px] text-muted mb-5">
-          This will remove {count === 1 ? "this skill" : `all ${count} selected skills`} from every agent where {count === 1 ? "it is" : "they are"} installed. This action cannot be undone.
+          {selectedAgent
+            ? `This will remove ${count === 1 ? "this skill" : `${count} selected skills`} from ${selectedAgent} only. The skill files will remain on disk.`
+            : `This will remove ${count === 1 ? "this skill" : `all ${count} selected skills`} from every agent where ${count === 1 ? "it is" : "they are"} installed. This action cannot be undone.`}
         </p>
         <div className="flex items-center gap-2 justify-end">
           <button
@@ -689,12 +697,29 @@ function BulkDeleteDialog({
           >
             Cancel
           </button>
-          <button
-            onClick={onConfirm}
-            className="bg-red-600 text-white text-[12px] px-4 py-1.5 rounded-lg hover:bg-red-700 transition-colors"
-          >
-            Delete {count} skill{count !== 1 ? "s" : ""}
-          </button>
+          {selectedAgent ? (
+            <>
+              <button
+                onClick={onRemoveFromAgent}
+                className="bg-red-600 text-white text-[12px] px-4 py-1.5 rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Remove from {selectedAgent}
+              </button>
+              <button
+                onClick={onConfirm}
+                className="text-red-400 text-[12px] px-4 py-1.5 hover:text-red-300 transition-colors"
+              >
+                Remove from all
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={onConfirm}
+              className="bg-red-600 text-white text-[12px] px-4 py-1.5 rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Delete {count} skill{count !== 1 ? "s" : ""}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -1799,6 +1824,41 @@ export function Home() {
     }
   }, [multiSelected, skills, selectedSkill])
 
+  const handleBulkRemoveFromAgent = useCallback(async () => {
+    if (!selectedAgent) return
+    const registryKey =
+      DISPLAY_NAME_TO_KEY[selectedAgent] ||
+      selectedAgent.toLowerCase().replace(/\s+/g, "-")
+    const pathsToRemove = new Set(multiSelected)
+    const skillNames = skills
+      .filter((s) => pathsToRemove.has(s.canonicalPath))
+      .map((s) => s.name)
+
+    for (const name of skillNames) {
+      try {
+        await electronAPI.removeFromAgent(name, registryKey)
+      } catch (err) {
+        console.error(`Failed to remove skill "${name}" from ${selectedAgent}:`, err)
+      }
+    }
+
+    if (selectedSkill && pathsToRemove.has(selectedSkill.canonicalPath)) {
+      setSelectedSkill(null)
+      setSkillContent(null)
+    }
+
+    setShowBulkDeleteDialog(false)
+    setMultiSelected(new Set())
+    setLastMultiSelectIndex(null)
+
+    try {
+      const installedSkills = await electronAPI.listInstalled()
+      setSkills(installedSkills)
+    } catch (err) {
+      console.error("Failed to refresh skills after bulk removal:", err)
+    }
+  }, [multiSelected, skills, selectedAgent, selectedSkill])
+
   // Keyboard shortcuts: Escape to clear selection, Cmd/Ctrl+A to select all
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1916,7 +1976,9 @@ export function Home() {
       {showBulkDeleteDialog && (
         <BulkDeleteDialog
           count={multiSelected.size}
+          selectedAgent={selectedAgent}
           onConfirm={handleBulkDeleteConfirm}
+          onRemoveFromAgent={handleBulkRemoveFromAgent}
           onCancel={() => setShowBulkDeleteDialog(false)}
         />
       )}

@@ -1019,7 +1019,7 @@ export function registerIpcHandlers(): void {
 
       if (parsed.type === "github") {
         // Clone repository to temp directory
-        tmpDir = path.join(os.tmpdir(), `skillsgate-${Date.now()}`)
+        tmpDir = path.join(os.tmpdir(), `skillsgate-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`)
         const cloneResult = await gitClone(`${parsed.url}.git`, tmpDir)
         if (!cloneResult.success) {
           return [
@@ -1326,7 +1326,7 @@ Add your skill instructions here.
     let tmpDir: string | null = null
 
     if (parsed.type === "github") {
-      tmpDir = path.join(os.tmpdir(), `skillsgate-upd-${Date.now()}`)
+      tmpDir = path.join(os.tmpdir(), `skillsgate-upd-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`)
       const cloneResult = await gitClone(`${parsed.url}.git`, tmpDir)
       if (!cloneResult.success) {
         throw new Error(`Clone failed: ${cloneResult.error}`)
