@@ -3,7 +3,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getToken } from "../../utils/auth-store.js";
-import { API_BASE_URL, SKILL_MD } from "../../constants.js";
+import { SKILL_MD } from "../../constants.js";
+
+const API_BASE_URL =
+  process.env.SKILLSGATE_API_URL ?? "https://skillsgate.ai";
 import {
   validateDirectory,
   checkSizeLimit,

@@ -9,11 +9,9 @@ import { runSync } from "./commands/sync.js";
 import { runLogin } from "./commands/login.js";
 import { runLogout } from "./commands/logout.js";
 import { runWhoami } from "./commands/whoami.js";
-import { runSearch } from "./commands/search.js";
 import { runPublish } from "./commands/publish.js";
 import { runScan } from "./commands/scan.js";
 import { runSetup } from "./commands/setup.js";
-import { flushTelemetry } from "./telemetry.js";
 
 // "SKILLS" in dark silver (dim), "GATE" in bright white (bold)
 const s = (t: string) => pc.dim(t);       // dark silver
@@ -90,12 +88,6 @@ async function main(): Promise<void> {
       await runWhoami();
       break;
 
-    case "search":
-    case "find":
-    case "s":
-      await runSearch(restArgs);
-      break;
-
     case "publish":
     case "p":
     case "pub":
@@ -161,9 +153,6 @@ function printHelp(): void {
   console.log(`    update ${DIM("[name]")}    Check and apply updates`);
   console.log(`    sync               Sync skills from node_modules`);
   console.log(
-    `    search ${DIM("<query>")}   Search for skills`,
-  );
-  console.log(
     `    publish ${DIM("[path]")}   Publish a skill to SkillsGate`,
   );
   console.log(
@@ -182,7 +171,6 @@ function printHelp(): void {
   console.log(`    skillsgate add vercel-labs/agent-skills@my-skill`);
   console.log(`    skillsgate add https://github.com/owner/repo`);
   console.log(`    skillsgate add ./local/skills`);
-  console.log(`    skillsgate search "tailwind CSS"`);
   console.log(`    skillsgate scan @username/audit-website ${DIM("# scan a SkillsGate skill")}`);
   console.log(`    skillsgate scan owner/repo              ${DIM("# scan a GitHub repo")}`);
   console.log(`    skillsgate scan owner/repo@skill-name   ${DIM("# scan a specific skill in a repo")}`);
@@ -210,7 +198,6 @@ function printHelp(): void {
 }
 
 main()
-  .then(() => flushTelemetry())
   .catch((err) => {
     console.error(pc.red(err.message || String(err)));
     process.exit(1);

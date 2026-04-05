@@ -6,7 +6,10 @@ import os from "node:os";
 import { fileExists, dirExists } from "../utils/fs.js";
 import { getToken } from "../utils/auth-store.js";
 import { fmt } from "../ui/format.js";
-import { API_BASE_URL, SKILL_MD } from "../constants.js";
+import { SKILL_MD } from "../constants.js";
+
+const API_BASE_URL =
+  process.env.SKILLSGATE_API_URL ?? "https://skillsgate.ai";
 import {
   validateDirectory,
   validateName,

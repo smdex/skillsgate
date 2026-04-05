@@ -1,20 +1,11 @@
-import { createHash } from "node:crypto";
 import path from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import {
   parseSource,
   getSourceLabel,
-  getOwnerRepo,
 } from "../core/source-parser.js";
 import { cloneRepo, cleanupTempDir, GitCloneError } from "../core/git.js";
-import {
-  downloadSkill,
-  SkillsGateDownloadError,
-  submitScanReport,
-  fetchScanSummary,
-} from "../core/skillsgate-client.js";
-import { getToken } from "../utils/auth-store.js";
 import { discoverSkills, filterSkills } from "../core/skill-discovery.js";
 import { confirmAction } from "../ui/prompts.js";
 import { dirExists } from "../utils/fs.js";
@@ -42,7 +33,6 @@ import {
   SeverityLevel,
   RiskAssessment,
 } from "../types.js";
-import { trackScan, trackScanError } from "../telemetry.js";
 
 interface ScanOptions {
   scanner?: string;
@@ -78,13 +68,6 @@ export async function runScan(args: string[]): Promise<void> {
         );
       }
       skillDir = parsed.localPath!;
-    } else if (parsed.type === "skillsgate") {
-      const spinner = p.spinner();
-      spinner.start(`Downloading ${sourceLabel} from SkillsGate...`);
-      const token = await getToken();
-      tmpDir = await downloadSkill(parsed.username!, parsed.slug!, token);
-      spinner.stop("Skill downloaded.");
-      skillDir = tmpDir;
     } else {
       const spinner = p.spinner();
       spinner.start(`Cloning ${sourceLabel}...`);
@@ -127,40 +110,6 @@ export async function runScan(args: string[]): Promise<void> {
           return;
         }
       }
-    }
-
-    // Build source ID
-    let sourceId: string;
-    if (parsed.type === "github") {
-      const ownerRepo = getOwnerRepo(parsed);
-      const subpath = parsed.subpath || "";
-      sourceId = `github:${ownerRepo}:${subpath}`;
-    } else if (parsed.type === "skillsgate") {
-      sourceId = `skillsgate:${parsed.username}/${parsed.slug}`;
-    } else {
-      sourceId = `local:${parsed.localPath}`;
-    }
-
-    // Fetch existing community scan summary
-    try {
-      const summary = await fetchScanSummary(sourceId);
-      if (summary && summary.totalScans > 0) {
-        const breakdown = summary.riskBreakdown;
-        const parts: string[] = [];
-        for (const risk of ["CLEAN", "LOW", "MEDIUM", "HIGH", "CRITICAL"] as RiskAssessment[]) {
-          if (breakdown[risk] > 0) {
-            parts.push(`${breakdown[risk]} ${risk}`);
-          }
-        }
-        p.log.info(
-          `Community scans: ${summary.totalScans} scans — ${parts.join(", ")}`,
-        );
-        if (summary.lastScannedAt) {
-          p.log.info(`Last scanned: ${summary.lastScannedAt}`);
-        }
-      }
-    } catch {
-      // Silent on failure
     }
 
     // Scanner detection
@@ -360,66 +309,6 @@ export async function runScan(args: string[]): Promise<void> {
       console.log(result.stdout);
     }
 
-    // Community sharing
-    let shared = false;
-    const token = await getToken();
-
-    if (token && report && !parseFailed && !options.noShare) {
-      let shouldShare: boolean;
-
-      if (options.yes) {
-        shouldShare = true;
-      } else {
-        const shareResult = await p.confirm({
-          message: "Share your scan results with the SkillsGate community?",
-        });
-        if (p.isCancel(shareResult)) {
-          shouldShare = false;
-        } else {
-          shouldShare = shareResult as boolean;
-        }
-      }
-
-      if (shouldShare) {
-        const contentHash = createHash("sha256")
-          .update(skills.map((s) => s.content).join(""))
-          .digest("hex");
-
-        const submitted = await submitScanReport(
-          {
-            sourceId,
-            contentHash,
-            scannerType: selectedScanner.name,
-            risk: report.risk,
-            summary: report.summary,
-            findings: report.findings,
-          },
-          token,
-        );
-
-        if (submitted) {
-          p.log.success("Scan submitted to SkillsGate community.");
-          shared = true;
-        } else {
-          p.log.warn(
-            fmt.dim("Could not submit to community. Your session may have expired — try `skillsgate login` again."),
-          );
-        }
-      }
-    }
-
-    // Telemetry
-    trackScan({
-      source: getSourceLabel(parsed),
-      sourceType: parsed.type,
-      scanner: selectedScanner.name,
-      risk: report?.risk,
-      findingCount: report?.findings?.length,
-      durationMs,
-      parseFailed,
-      shared,
-    });
-
     p.outro(
       report
         ? fmt.success(`Scan complete — Risk: ${report.risk}`)
@@ -434,40 +323,10 @@ export async function runScan(args: string[]): Promise<void> {
       } else {
         p.log.error(err.message);
       }
-      trackScanError({
-        source,
-        sourceType: parsed?.type,
-        scanner: options.scanner,
-        errorCode: err.isAuth ? "CLONE_AUTH_FAILED" : "CLONE_FAILED",
-        errorMessage: err.message,
-      });
-    } else if (err instanceof SkillsGateDownloadError) {
-      p.log.error(err.message);
-      trackScanError({
-        source,
-        sourceType: parsed?.type,
-        scanner: options.scanner,
-        errorCode: "DOWNLOAD_FAILED",
-        errorMessage: err.message,
-      });
     } else if (err instanceof SkillsGateError) {
       p.log.error(err.message);
-      trackScanError({
-        source,
-        sourceType: parsed?.type,
-        scanner: options.scanner,
-        errorCode: err.code,
-        errorMessage: err.message,
-      });
     } else if (err instanceof Error) {
       p.log.error(err.message);
-      trackScanError({
-        source,
-        sourceType: parsed?.type,
-        scanner: options.scanner,
-        errorCode: "UNKNOWN",
-        errorMessage: err.message,
-      });
     }
     process.exit(1);
   } finally {

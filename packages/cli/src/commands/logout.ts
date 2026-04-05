@@ -1,6 +1,7 @@
 import * as p from "@clack/prompts";
 import { loadAuth, clearAuth } from "../utils/auth-store.js";
-import { API_BASE_URL } from "../constants.js";
+const API_BASE_URL =
+  process.env.SKILLSGATE_API_URL ?? "https://skillsgate.ai";
 
 export async function runLogout(): Promise<void> {
   const existing = await loadAuth();

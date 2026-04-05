@@ -6,8 +6,6 @@ import {
   getOwnerRepo,
 } from "../../core/source-parser.js";
 import { cloneRepo, fetchTreeSha, cleanupTempDir } from "../../core/git.js";
-import { downloadSkill } from "../../core/skillsgate-client.js";
-import { getToken } from "../../utils/auth-store.js";
 import { discoverSkills, filterSkills } from "../../core/skill-discovery.js";
 import { installSkillForAgent, sanitizeName } from "../../core/installer.js";
 import {
@@ -68,10 +66,6 @@ export function registerAdd(server: McpServer): void {
             return mcpError(`Local path does not exist: ${parsed.localPath}`);
           }
           skillDir = parsed.localPath!;
-        } else if (parsed.type === "skillsgate") {
-          const token = await getToken();
-          tmpDir = await downloadSkill(parsed.username!, parsed.slug!, token);
-          skillDir = tmpDir;
         } else {
           tmpDir = await cloneRepo(parsed);
           skillDir = tmpDir;
