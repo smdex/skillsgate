@@ -1,5 +1,17 @@
 import { contextBridge, ipcRenderer } from "electron"
 
+async function invokeWithLogging<T>(channel: string, ...args: unknown[]): Promise<T> {
+  console.log(`[preload] invoking ${channel}`, ...args)
+  try {
+    const result = await ipcRenderer.invoke(channel, ...args)
+    console.log(`[preload] ${channel} resolved`, result)
+    return result as T
+  } catch (error) {
+    console.error(`[preload] ${channel} failed`, error)
+    throw error
+  }
+}
+
 contextBridge.exposeInMainWorld("electronAPI", {
   // Agents
   detectAgents: () => ipcRenderer.invoke("agents:detect"),
@@ -10,7 +22,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   installSkill: (source: string, agents: string[], scope: string) =>
     ipcRenderer.invoke("skills:install", source, agents, scope),
   installSkillViaCli: (source: string) =>
-    ipcRenderer.invoke("skills:install-via-cli", source),
+    invokeWithLogging("skills:install-via-cli", source),
   searchCatalog: (query: string, limit?: number, offset?: number) =>
     ipcRenderer.invoke("skills:search-catalog", query, limit, offset),
   fetchSkillContent: (source: string, skillId: string) =>

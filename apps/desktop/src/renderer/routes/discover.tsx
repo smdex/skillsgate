@@ -330,10 +330,11 @@ interface DetailPanelProps {
   skill: CatalogSkill
   onClose: () => void
   installedNames: Set<string>
+  installedSources: Set<string>
   onInstall: (source: string, agentNames: string[]) => Promise<void>
 }
 
-function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelProps) {
+function DetailPanel({ skill, onClose, installedNames, installedSources, onInstall }: DetailPanelProps) {
   const [availableAgents, setAvailableAgents] = useState<DetectedAgent[]>([])
   const [defaultAgents, setDefaultAgents] = useState<string[]>([])
   const [selectedAgents, setSelectedAgents] = useState<string[]>([])
@@ -342,7 +343,8 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
   const [installing, setInstalling] = useState(false)
   const [installError, setInstallError] = useState<string | null>(null)
   const [installed, setInstalled] = useState(
-    installedNames.has(skill.name.toLowerCase()),
+    installedNames.has(skill.name.toLowerCase()) ||
+      installedSources.has(skill.source.toLowerCase()),
   )
 
   // Fetch SKILL.md content from GitHub raw
@@ -371,8 +373,11 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
 
   // Sync installed state when prop changes
   useEffect(() => {
-    setInstalled(installedNames.has(skill.name.toLowerCase()))
-  }, [installedNames, skill.name])
+    setInstalled(
+      installedNames.has(skill.name.toLowerCase()) ||
+        installedSources.has(skill.source.toLowerCase()),
+    )
+  }, [installedNames, installedSources, skill.name, skill.source])
 
   useEffect(() => {
     let cancelled = false
@@ -399,13 +404,25 @@ function DetailPanel({ skill, onClose, installedNames, onInstall }: DetailPanelP
   async function handleInstall() {
     if (!skill.source) return
 
+    console.log("[discover/detail] install clicked", {
+      source: skill.source,
+      selectedAgents,
+    })
     setInstalling(true)
     setInstallError(null)
     try {
       await onInstall(skill.source, selectedAgents)
+      console.log("[discover/detail] install succeeded", {
+        source: skill.source,
+      })
       setInstalled(true)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
+      console.error("[discover/detail] install failed", {
+        source: skill.source,
+        error: err,
+        message: msg,
+      })
       setInstallError(msg)
     } finally {
       setInstalling(false)
@@ -548,18 +565,37 @@ export function Discover() {
   const [activeQuery, setActiveQuery] = useState("skill")
   const [selectedSkill, setSelectedSkill] = useState<CatalogSkill | null>(null)
   const [installedNames, setInstalledNames] = useState<Set<string>>(new Set())
+  const [installedSources, setInstalledSources] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(true)
 
   const LIMIT = 30
   const scrollRef = useRef<HTMLDivElement>(null)
 
+  function updateInstalledState(installed: InstalledSkill[]) {
+    setInstalledNames(new Set(installed.map((s) => s.name.toLowerCase())))
+    setInstalledSources(
+      new Set(
+        installed
+          .map((s) => s.source?.toLowerCase())
+          .filter((value): value is string => Boolean(value)),
+      ),
+    )
+  }
+
   // Load installed skills to mark installed state
   useEffect(() => {
-    electronAPI.listInstalled().then((installed) => {
-      const names = new Set(installed.map((s) => s.name.toLowerCase()))
-      setInstalledNames(names)
+    const cleanup = electronAPI.onSkillsUpdated((updatedSkills) => {
+      console.log("[discover] received skills:updated event", updatedSkills)
+      updateInstalledState(updatedSkills)
     })
+
+    electronAPI.listInstalled().then((installed) => {
+      console.log("[discover] initial installed skills loaded", installed)
+      updateInstalledState(installed)
+    })
+
+    return cleanup
   }, [])
 
   // Initial catalog load
@@ -629,16 +665,19 @@ export function Discover() {
   }, [handleLoadMore, loadingMore, hasMore])
 
   async function handleInstall(source: string, _agentNames: string[]) {
+    console.log("[discover] starting install via preload", { source })
     // Use npx skills add for skills.sh sources — handles content-based install
     // (Chops pattern) without cloning entire repos
     const result = await electronAPI.installSkillViaCli(source)
+    console.log("[discover] install via preload returned", { source, result })
     if (!result.success) {
-      throw new Error(result.error || "Install failed")
+      throw new Error(result.error || result.output || "Install failed")
     }
 
-    // Refresh installed skills list
-    const installed = await electronAPI.listInstalled()
-    setInstalledNames(new Set(installed.map((s) => s.name.toLowerCase())))
+    // Force a full scan so Discover doesn't reread stale cache.
+    const installed = await electronAPI.rescanSkills()
+    console.log("[discover] installed skills after rescan", installed)
+    updateInstalledState(installed)
   }
 
   return (
@@ -770,6 +809,7 @@ export function Discover() {
           skill={selectedSkill}
           onClose={() => setSelectedSkill(null)}
           installedNames={installedNames}
+          installedSources={installedSources}
           onInstall={handleInstall}
         />
       )}

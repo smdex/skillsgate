@@ -2,7 +2,7 @@ import { ipcMain, shell, type BrowserWindow } from "electron"
 import os from "node:os"
 import path from "node:path"
 import fs from "node:fs/promises"
-import { execFile, execSync } from "node:child_process"
+import { execFile, spawn } from "node:child_process"
 import matter from "gray-matter"
 import { app } from "electron"
 import { openDb } from "./db/index"
@@ -26,28 +26,6 @@ const home = os.homedir()
 const configHome = process.env.XDG_CONFIG_HOME || path.join(home, ".config")
 const factoryHome = process.env.FACTORY_HOME || path.join(home, ".factory")
 
-// Resolve the user's login shell PATH for packaged Electron builds
-// (Electron's process.env.PATH is minimal and may not include nvm/homebrew/etc.)
-let userShellEnv: Record<string, string> | null = null
-function getShellEnv(): Record<string, string> {
-  if (userShellEnv) return userShellEnv
-  try {
-    const userShell = process.env.SHELL || "/bin/zsh"
-    const result = execSync(`${userShell} -ilc 'env'`, {
-      timeout: 5_000,
-      encoding: "utf-8",
-    })
-    const env: Record<string, string> = {}
-    for (const line of result.split("\n")) {
-      const idx = line.indexOf("=")
-      if (idx > 0) env[line.slice(0, idx)] = line.slice(idx + 1)
-    }
-    userShellEnv = env
-    return env
-  } catch {
-    return process.env as Record<string, string>
-  }
-}
 
 interface AgentEntry {
   name: string
@@ -727,12 +705,12 @@ function gitClone(
   url: string,
   dest: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const env = getShellEnv()
+  const userShell = process.env.SHELL || "/bin/zsh"
   return new Promise((resolve) => {
     execFile(
-      "git",
-      ["clone", "--depth", "1", url, dest],
-      { timeout: 60_000, env },
+      userShell,
+      ["-lc", `git clone --depth 1 ${url} ${dest}`],
+      { timeout: 60_000 },
       (error) => {
         if (error) {
           resolve({ success: false, error: error.message })
@@ -936,12 +914,87 @@ let settingsStore: SettingsStore
 let serverStore: RemoteServerStore
 let skillStore: RemoteSkillStore
 
+const COMMON_BIN_DIRS = [
+  "/opt/homebrew/bin",
+  "/opt/homebrew/sbin",
+  "/usr/local/bin",
+  "/usr/local/sbin",
+  "/usr/bin",
+  "/bin",
+  "/usr/sbin",
+  "/sbin",
+]
+
+function dedupePathEntries(entries: string[]): string {
+  return [...new Set(entries.filter(Boolean))].join(path.delimiter)
+}
+
+function buildCliEnv(): NodeJS.ProcessEnv {
+  const currentPath = process.env.PATH?.split(path.delimiter) ?? []
+  return {
+    ...process.env,
+    PATH: dedupePathEntries([...currentPath, ...COMMON_BIN_DIRS]),
+  }
+}
+
+function execFileAsync(
+  file: string,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    execFile(file, args, { env }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(stderr || error.message))
+        return
+      }
+      resolve({ stdout, stderr })
+    })
+  })
+}
+
+async function resolveNpxPath(): Promise<string> {
+  const env = buildCliEnv()
+  const userShell = process.env.SHELL || "/bin/zsh"
+
+  try {
+    const { stdout } = await execFileAsync(userShell, ["-lc", "command -v npx"], env)
+    const resolved = stdout.trim().split(/\r?\n/).at(-1)?.trim()
+    if (resolved) {
+      return await fs.realpath(resolved).catch(() => resolved)
+    }
+  } catch (error) {
+    console.error("[skills:install-via-cli] failed to resolve npx via login shell:", error)
+  }
+
+  const candidatePaths = [
+    "/opt/homebrew/bin/npx",
+    "/usr/local/bin/npx",
+    "/usr/bin/npx",
+    "/bin/npx",
+  ].filter((value): value is string => Boolean(value))
+
+  for (const candidate of candidatePaths) {
+    try {
+      await fs.access(candidate)
+      return await fs.realpath(candidate).catch(() => candidate)
+    } catch {
+      continue
+    }
+  }
+
+  throw new Error(
+    `Unable to locate npx. PATH=${env.PATH || "<empty>"} SHELL=${userShell}`,
+  )
+}
+
 export function registerIpcHandlers(): void {
   // Open shared SQLite database
   const db = openDb()
   settingsStore = new SettingsStore(db)
   serverStore = new RemoteServerStore(db)
   skillStore = new RemoteSkillStore(db)
+  console.log("[ipc] registerIpcHandlers initialized")
   // Detect which agents are installed on this machine
   ipcMain.handle("agents:detect", async () => {
     return detectAgents()
@@ -1206,28 +1259,101 @@ export function registerIpcHandlers(): void {
       _event,
       source: string,
     ): Promise<{ success: boolean; output: string; error?: string }> => {
-      const env = getShellEnv()
-      return new Promise((resolve) => {
-        execFile(
-          "npx",
-          ["skills", "add", source, "--all", "-y"],
-          { timeout: 120_000, shell: true, env },
-          (error, stdout, stderr) => {
-            if (error) {
-              resolve({
-                success: false,
-                output: stdout || "",
-                error: stderr || error.message,
-              })
-            } else {
+      const safeSource = source.replace(/[^a-zA-Z0-9_./-]/g, "")
+      const env = buildCliEnv()
+      console.log("[skills:install-via-cli] request received", {
+        source,
+        safeSource,
+        shell: process.env.SHELL || "/bin/zsh",
+        path: env.PATH,
+      })
+
+      try {
+        const npxPath = await resolveNpxPath()
+        console.log("[skills:install-via-cli] resolved npx", npxPath)
+
+        return await new Promise((resolve) => {
+          const child = spawn(
+            npxPath,
+            ["skills", "add", safeSource, "--all", "--global", "-y"],
+            {
+              cwd: os.homedir(),
+              env,
+              stdio: ["ignore", "pipe", "pipe"],
+            },
+          )
+
+          let stdout = ""
+          let stderr = ""
+          let timedOut = false
+          const timeout = setTimeout(() => {
+            timedOut = true
+            console.error("[skills:install-via-cli] timed out after 120000ms")
+            child.kill("SIGTERM")
+          }, 120_000)
+
+          child.stdout.on("data", (chunk) => {
+            const text = chunk.toString()
+            stdout += text
+            console.log("[skills:install-via-cli][stdout]", text.trimEnd())
+          })
+
+          child.stderr.on("data", (chunk) => {
+            const text = chunk.toString()
+            stderr += text
+            console.error("[skills:install-via-cli][stderr]", text.trimEnd())
+          })
+
+          child.on("error", (error) => {
+            clearTimeout(timeout)
+            console.error("[skills:install-via-cli] spawn error:", error)
+            resolve({
+              success: false,
+              output: stdout,
+              error: error.message,
+            })
+          })
+
+          child.on("close", async (code, signal) => {
+            clearTimeout(timeout)
+            console.log("[skills:install-via-cli] process closed", { code, signal, timedOut })
+            if (code === 0 && !timedOut) {
+              try {
+                await rescanAndCache()
+              } catch (error) {
+                const message = error instanceof Error ? error.message : String(error)
+                console.error("[skills:install-via-cli] rescan failed after successful install:", message)
+                resolve({
+                  success: false,
+                  output: stdout,
+                  error: `Install completed but refresh failed: ${message}`,
+                })
+                return
+              }
+
               resolve({
                 success: true,
-                output: stdout || "",
+                output: stdout,
               })
+              return
             }
-          },
-        )
-      })
+
+            resolve({
+              success: false,
+              output: stdout,
+              error: stderr || `Install exited with code ${code ?? "unknown"}${signal ? ` (signal ${signal})` : ""}`,
+            })
+          })
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        console.error("[skills:install-via-cli] setup failed:", message)
+        return {
+          success: false,
+          output: "",
+          error: message,
+        }
+      }
     },
   )
 
