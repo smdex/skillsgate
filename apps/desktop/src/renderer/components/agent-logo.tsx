@@ -5,6 +5,7 @@ import codexLogo from "../assets/agent-logos/codex.svg"
 import copilotLogo from "../assets/agent-logos/copilot.svg"
 import cursorLogo from "../assets/agent-logos/cursor.svg"
 import droidCliLogo from "../assets/agent-logos/droid-cli.svg"
+import ob1Logo from "../assets/agent-logos/ob-1.svg"
 import openclawLogo from "../assets/agent-logos/openclaw.svg"
 import opencodeLogo from "../assets/agent-logos/opencode.svg"
 import windsurfLogo from "../assets/agent-logos/windsurf.svg"
@@ -16,9 +17,14 @@ const AGENT_LOGOS: Record<string, string> = {
   windsurf: windsurfLogo,
   "codex-cli": codexLogo,
   "droid-cli": droidCliLogo,
+  "ob-1": ob1Logo,
   amp: ampLogo,
   opencode: opencodeLogo,
   openclaw: openclawLogo,
+}
+
+const AGENT_LOGO_FILTERS: Record<string, string> = {
+  "ob-1": "none",
 }
 
 const DISPLAY_NAME_TO_KEY: Record<string, string> = {
@@ -30,6 +36,7 @@ const DISPLAY_NAME_TO_KEY: Record<string, string> = {
   Continue: "continue",
   "Codex CLI": "codex-cli",
   "Droid CLI": "droid-cli",
+  "OB-1": "ob-1",
   Amp: "amp",
   Goose: "goose",
   Junie: "junie",
@@ -78,6 +85,7 @@ interface AgentLogoProps {
 export const AgentLogo = memo(function AgentLogo({ name, size = 16, shortCode, className = "" }: AgentLogoProps) {
   const key = getAgentKey(name)
   const logo = AGENT_LOGOS[key]
+  const logoFilter = AGENT_LOGO_FILTERS[key] ?? "invert(1) brightness(0.9)"
 
   if (logo) {
     return (
@@ -87,7 +95,7 @@ export const AgentLogo = memo(function AgentLogo({ name, size = 16, shortCode, c
         width={size}
         height={size}
         className={`inline-block flex-shrink-0 ${className}`}
-        style={{ width: size, height: size, filter: "invert(1) brightness(0.9)" }}
+        style={{ width: size, height: size, filter: logoFilter }}
         draggable={false}
       />
     )

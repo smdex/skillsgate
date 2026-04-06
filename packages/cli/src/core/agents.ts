@@ -8,6 +8,7 @@ import { AGENTS_DIR, SKILLS_SUBDIR } from "../constants.js";
 const home = os.homedir();
 const configHome = process.env.XDG_CONFIG_HOME || path.join(home, ".config");
 const factoryHome = process.env.FACTORY_HOME || path.join(home, ".factory");
+const ob1Home = process.env.OB1_HOME || path.join(home, ".ob1");
 
 async function dirExists(p: string): Promise<boolean> {
   try {
@@ -98,6 +99,14 @@ export const agents: Record<string, AgentConfig> = {
     skillsDir: ".factory/skills",
     globalSkillsDir: path.join(factoryHome, "skills"),
     detectInstalled: async () => dirExists(factoryHome),
+  },
+
+  "ob-1": {
+    name: "ob-1",
+    displayName: "OB-1",
+    skillsDir: ".ob1/skills",
+    globalSkillsDir: path.join(ob1Home, "skills"),
+    detectInstalled: async () => dirExists(ob1Home),
   },
 
   amp: {

@@ -14,7 +14,7 @@
 <p align="center">
   <img src="https://img.shields.io/npm/v/skillsgate?color=a8a29e&label=npm" alt="npm version" />
   <img src="https://img.shields.io/badge/skills-91k+-a8a29e" alt="91k+ skills" />
-  <img src="https://img.shields.io/badge/agents-19-a8a29e" alt="19 agents" />
+  <img src="https://img.shields.io/badge/agents-20-a8a29e" alt="20 agents" />
   <img src="https://img.shields.io/badge/license-MIT-a8a29e" alt="MIT license" />
 </p>
 
@@ -26,7 +26,7 @@
 
 ## What is SkillsGate?
 
-SkillsGate lets you browse, install, and manage AI agent skills from a single interface. It works with 19+ agents and gives you access to a catalog of 91,000+ skills.
+SkillsGate lets you browse, install, and manage AI agent skills from a single interface. It works with 20+ agents and gives you access to a catalog of 91,000+ skills.
 
 Instead of hunting through GitHub repos and copying markdown files by hand, you open SkillsGate, search for what you need, and install it to any combination of agents with one click.
 
@@ -58,7 +58,7 @@ npm install -g skillsgate
 
 ## Supported Agents
 
-Claude Code, Cursor, Windsurf, GitHub Copilot, Cline, Continue, Codex CLI, Droid CLI, Amp, Goose, Junie, Kilo Code, OpenCode, OpenClaw, Pear AI, Roo Code, Trae, Zed, and Universal.
+Claude Code, Cursor, Windsurf, GitHub Copilot, Cline, Continue, Codex CLI, Droid CLI, OB-1, Amp, Goose, Junie, Kilo Code, OpenCode, OpenClaw, Pear AI, Roo Code, Trae, Zed, and Universal.
 
 ## Features
 
