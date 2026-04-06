@@ -32,13 +32,15 @@ try {
 
 // Not found -- install it explicitly
 const version = require("../package.json").version;
+const fullPkg = `@skillsgate/${pkg}@${version}`;
 try {
-  execSync(`npm install -g @skillsgate/${pkg}@${version} --no-save`, {
+  execSync(`npm install -g ${fullPkg} --no-save`, {
     stdio: "inherit",
     timeout: 30000,
   });
 } catch {
   // Fallback to latest if exact version is not published for this platform
+  console.warn(`Could not install ${fullPkg}, falling back to @latest (versions may differ)`);
   try {
     execSync(`npm install -g @skillsgate/${pkg}@latest --no-save`, {
       stdio: "inherit",

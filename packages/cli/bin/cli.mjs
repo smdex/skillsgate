@@ -53,13 +53,13 @@ if (!binPath) {
   const fullPkg = `@skillsgate/${pkg}@${version}`;
   console.error(`Installing platform binary (${fullPkg})...`);
   try {
-    execSync(`npm install -g ${fullPkg}`, { stdio: "inherit", timeout: 30000 });
+    execSync(`npm install -g ${fullPkg} --no-save`, { stdio: "inherit", timeout: 30000 });
     binPath = findBinary();
   } catch {
     // Fallback to latest if exact version is not published for this platform
-    console.error(`Failed to install ${fullPkg}. Falling back to latest...`);
+    console.warn(`Could not install ${fullPkg}, falling back to @latest (versions may differ)`);
     try {
-      execSync(`npm install -g @skillsgate/${pkg}@latest`, { stdio: "inherit", timeout: 30000 });
+      execSync(`npm install -g @skillsgate/${pkg}@latest --no-save`, { stdio: "inherit", timeout: 30000 });
       binPath = findBinary();
     } catch {
       // fall through to error below
