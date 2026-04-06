@@ -385,7 +385,7 @@ function DetailPanel({ skill, onClose, installedNames, installedSources, onInsta
       .then(([agents, settings]) => {
         if (cancelled) return
         setAvailableAgents(agents)
-        const defaults = (settings["install.defaultAgents"] as string[]) || agents.map((agent) => agent.name)
+        const defaults = (settings["install.defaultAgents"] as string[]) || []
         setDefaultAgents(defaults)
         setSelectedAgents(defaults)
       })
@@ -664,19 +664,17 @@ export function Discover() {
     return () => el.removeEventListener("scroll", onScroll)
   }, [handleLoadMore, loadingMore, hasMore])
 
-  async function handleInstall(source: string, _agentNames: string[]) {
-    console.log("[discover] starting install via preload", { source })
-    // Use npx skills add for skills.sh sources — handles content-based install
-    // (Chops pattern) without cloning entire repos
-    const result = await electronAPI.installSkillViaCli(source)
-    console.log("[discover] install via preload returned", { source, result })
-    if (!result.success) {
-      throw new Error(result.error || result.output || "Install failed")
+  async function handleInstall(source: string, agentNames: string[]) {
+    console.log("[discover] starting install", { source, agentNames })
+    const results = await electronAPI.installSkill(source, agentNames, "global")
+    const failed = results.filter((r: { success: boolean }) => !r.success)
+    if (failed.length > 0) {
+      const errorMsg = failed.map((r: { error?: string }) => r.error).join(", ")
+      throw new Error(errorMsg)
     }
 
-    // Force a full scan so Discover doesn't reread stale cache.
     const installed = await electronAPI.rescanSkills()
-    console.log("[discover] installed skills after rescan", installed)
+    console.log("[discover] installed skills after install", installed)
     updateInstalledState(installed)
   }
 
