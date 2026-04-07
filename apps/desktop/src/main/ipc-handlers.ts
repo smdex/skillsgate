@@ -288,6 +288,14 @@ const PROJECT_PROBES = [
   { subpath: ".agents/skills" },
 ]
 
+// ---------------------------------------------------------------------------
+// Agent detection cache
+// ---------------------------------------------------------------------------
+
+let cachedAgents: Array<{ name: string; displayName: string; shortCode: string }> | null = null
+let agentCacheTime = 0
+const AGENT_CACHE_TTL_MS = 60_000 // Re-detect at most once per minute
+
 async function parseSkillMd(filePath: string): Promise<ParsedSkill | null> {
   try {
     const raw = await fs.readFile(filePath, "utf-8")
@@ -522,6 +530,11 @@ function sanitizeName(name: string): string {
 async function detectAgents(): Promise<
   Array<{ name: string; displayName: string; shortCode: string }>
 > {
+  const now = Date.now()
+  if (cachedAgents && now - agentCacheTime < AGENT_CACHE_TTL_MS) {
+    return cachedAgents
+  }
+
   const detected: Array<{
     name: string
     displayName: string
@@ -540,6 +553,9 @@ async function detectAgents(): Promise<
       // Skip agents that fail detection
     }
   }
+
+  cachedAgents = detected
+  agentCacheTime = now
   return detected
 }
 
