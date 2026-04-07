@@ -25,17 +25,26 @@ export class SkillsFileWatcher {
   }
 
   async start(): Promise<void> {
-    // Collect all directories to watch
     const dirsToWatch = new Set<string>()
 
     // Always watch the canonical skills directory
-    dirsToWatch.add(CANONICAL_DIR)
+    try {
+      const realCanonical = await fs.promises.realpath(CANONICAL_DIR)
+      dirsToWatch.add(realCanonical)
+    } catch {
+      dirsToWatch.add(CANONICAL_DIR)
+    }
 
-    // Watch each detected agent's globalSkillsDir
+    // For each agent, only watch if it resolves to a different real path
     const detected = await detectAgents()
     for (const agent of detected) {
       const entry = agentRegistry[agent.name]
-      if (entry) {
+      if (!entry) continue
+      try {
+        const realPath = await fs.promises.realpath(entry.globalSkillsDir)
+        dirsToWatch.add(realPath)
+      } catch {
+        // Dir doesn't exist yet -- watch the expected path
         dirsToWatch.add(entry.globalSkillsDir)
       }
     }
