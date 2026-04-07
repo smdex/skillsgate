@@ -17,6 +17,7 @@ const CANONICAL_DIR = path.join(os.homedir(), ".agents", "skills")
 export class SkillsFileWatcher {
   private watchers: fs.FSWatcher[] = []
   private debounceTimer: ReturnType<typeof setTimeout> | null = null
+  // undefined = no pending event, string = single changed path, null = ambiguous (full rescan)
   private pendingPath: string | null | undefined = undefined
   private mainWindow: BrowserWindow
 
@@ -111,7 +112,7 @@ export class SkillsFileWatcher {
         if (typeof pathToRescan === "string") {
           await rescanSingleSkill(pathToRescan)
         } else {
-          await rescanAndCache()
+          await rescanAndCache({ skipCustomPaths: true })
         }
       } catch (err) {
         console.error("Rescan after file change failed:", err)

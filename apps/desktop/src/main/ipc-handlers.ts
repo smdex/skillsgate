@@ -458,7 +458,6 @@ async function collectSkillsFromRoot(
     const parsed = await parseSkillMd(skillMdPath)
     const folderName = path.basename(skillDir)
     const lockEntry = lock.skills[folderName]
-    const supportingFiles: SupportingFile[] = []
 
     results.push({
       name: parsed?.name || folderName,
@@ -707,13 +706,14 @@ export function setMainWindow(win: BrowserWindow): void {
 }
 
 /**
- * Run a full filesystem scan, persist results to the SQLite cache,
+ * Run a filesystem scan, persist results to the SQLite cache,
  * and push the updated list to the renderer via the skills:updated event.
  *
- * Safe to call from anywhere (file watcher, IPC handler, etc.).
+ * Pass { skipCustomPaths: true } from the file watcher to avoid
+ * walking potentially large custom scan directories on every change.
  */
-async function rescanAndCache() {
-  const raw = await listInstalledSkillsInternal({ skipCustomPaths: true })
+async function rescanAndCache(opts: { skipCustomPaths?: boolean } = {}) {
+  const raw = await listInstalledSkillsInternal({ skipCustomPaths: opts.skipCustomPaths })
   saveCachedSkills(raw)
 
   const skills = toRendererSkills(raw)
