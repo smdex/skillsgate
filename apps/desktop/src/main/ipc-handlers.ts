@@ -705,6 +705,93 @@ async function rescanAndCache() {
   return skills
 }
 
+/**
+ * Re-scan a single skill by folder name across all agent directories.
+ * Falls back to full rescan if the skill can't be identified.
+ */
+async function rescanSingleSkill(changedPath: string): Promise<void> {
+  // Extract the skill folder name from the changed path.
+  // Changed paths look like: "skill-folder-name/SKILL.md" or "skill-folder-name"
+  const segments = changedPath.split(path.sep).filter(Boolean)
+  const skillFolderName = segments[0]
+
+  if (!skillFolderName || skillFolderName.startsWith(".")) {
+    // Ambiguous change (root-level or hidden dir) -- full rescan
+    await rescanAndCache()
+    return
+  }
+
+  // Load current cache
+  const cached = loadCachedSkills()
+  const existingIdx = cached.findIndex((s) => s.folderName === skillFolderName)
+
+  // Re-scan just this skill across all agents
+  const lock = await readSkillLock()
+  const agents: string[] = []
+  const agentShortCodes: string[] = []
+  let resolvedDir: string | null = null
+  let parsed: ParsedSkill | null = null
+
+  for (const agent of Object.values(agentRegistry)) {
+    const skillDir = path.join(agent.globalSkillsDir, skillFolderName)
+    try {
+      const realPath = await fs.realpath(skillDir)
+      await fs.stat(realPath)
+      if (!resolvedDir) {
+        resolvedDir = realPath
+        const skillMdPath = path.join(realPath, "SKILL.md")
+        parsed = await parseSkillMd(skillMdPath)
+      }
+      agents.push(agent.displayName)
+      agentShortCodes.push(agent.shortCode)
+    } catch {
+      // Not present in this agent
+    }
+  }
+
+  if (resolvedDir && parsed && agents.length > 0) {
+    const lockEntry = lock.skills[skillFolderName]
+    const scope = getScopeForPath(resolvedDir)
+    const updatedSkill = {
+      name: parsed.name,
+      description: parsed.description,
+      path: resolvedDir,
+      canonicalPath: resolvedDir,
+      agents,
+      agentShortCodes,
+      scope,
+      projectName: scope === "project" ? getProjectNameForPath(resolvedDir) : null,
+      hasSupportingFiles: false,
+      supportingFiles: [] as SupportingFile[],
+      source: lockEntry?.source,
+      sourceType: lockEntry?.sourceType,
+      installedAt: lockEntry?.installedAt,
+      updatedAt: lockEntry?.updatedAt,
+      folderName: skillFolderName,
+    }
+
+    if (existingIdx >= 0) {
+      cached[existingIdx] = updatedSkill
+    } else {
+      cached.push(updatedSkill)
+    }
+  } else if (existingIdx >= 0) {
+    // Skill was deleted
+    cached.splice(existingIdx, 1)
+  } else {
+    // Can't resolve -- full rescan
+    await rescanAndCache()
+    return
+  }
+
+  saveCachedSkills(cached)
+
+  const skills = toRendererSkills(cached)
+  if (_mainWindow && !_mainWindow.isDestroyed()) {
+    _mainWindow.webContents.send("skills:updated", skills)
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Git clone helper (uses system git to avoid simple-git dependency)
 // ---------------------------------------------------------------------------
@@ -1698,4 +1785,4 @@ Add your skill instructions here.
 }
 
 // Export for use by file-watcher and main process
-export { listInstalledSkills, rescanAndCache, detectAgents, agentRegistry }
+export { listInstalledSkills, rescanAndCache, rescanSingleSkill, detectAgents, agentRegistry }

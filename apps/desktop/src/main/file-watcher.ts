@@ -2,7 +2,7 @@ import { BrowserWindow } from "electron"
 import fs from "node:fs"
 import path from "node:path"
 import os from "node:os"
-import { rescanAndCache, detectAgents, agentRegistry } from "./ipc-handlers"
+import { rescanAndCache, rescanSingleSkill, detectAgents, agentRegistry } from "./ipc-handlers"
 
 const DEBOUNCE_MS = 500
 const CANONICAL_DIR = path.join(os.homedir(), ".agents", "skills")
@@ -17,6 +17,7 @@ const CANONICAL_DIR = path.join(os.homedir(), ".agents", "skills")
 export class SkillsFileWatcher {
   private watchers: fs.FSWatcher[] = []
   private debounceTimer: ReturnType<typeof setTimeout> | null = null
+  private pendingPath: string | null | undefined = undefined
   private mainWindow: BrowserWindow
 
   constructor(mainWindow: BrowserWindow) {
@@ -58,8 +59,8 @@ export class SkillsFileWatcher {
       const watcher = fs.watch(
         dir,
         { recursive: true, persistent: false },
-        (_eventType, _filename) => {
-          this.scheduleRescan()
+        (_eventType, filename) => {
+          this.scheduleRescan(typeof filename === "string" ? filename : null)
         },
       )
 
@@ -78,17 +79,31 @@ export class SkillsFileWatcher {
     }
   }
 
-  private scheduleRescan(): void {
+  private scheduleRescan(changedPath: string | null): void {
+    // Track which path changed. If multiple different files change within
+    // the debounce window, fall back to a full rescan (pendingPath = null).
+    if (changedPath === null) {
+      this.pendingPath = null
+    } else if (this.pendingPath === undefined) {
+      this.pendingPath = changedPath
+    } else if (this.pendingPath !== null && this.pendingPath !== changedPath) {
+      this.pendingPath = null
+    }
+
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer)
     }
 
     this.debounceTimer = setTimeout(async () => {
+      const pathToRescan = this.pendingPath
       this.debounceTimer = null
+      this.pendingPath = undefined
       try {
-        // rescanAndCache performs the full scan, saves to SQLite,
-        // and pushes skills:updated to the renderer automatically.
-        await rescanAndCache()
+        if (typeof pathToRescan === "string") {
+          await rescanSingleSkill(pathToRescan)
+        } else {
+          await rescanAndCache()
+        }
       } catch (err) {
         console.error("Rescan after file change failed:", err)
       }
@@ -100,6 +115,7 @@ export class SkillsFileWatcher {
       clearTimeout(this.debounceTimer)
       this.debounceTimer = null
     }
+    this.pendingPath = undefined
 
     for (const watcher of this.watchers) {
       try {
