@@ -450,7 +450,7 @@ async function collectSkillsFromRoot(
     const parsed = await parseSkillMd(skillMdPath)
     const folderName = path.basename(skillDir)
     const lockEntry = lock.skills[folderName]
-    const supportingFiles = await listSupportingFiles(canonicalPath)
+    const supportingFiles: SupportingFile[] = []
 
     results.push({
       name: parsed?.name || folderName,
@@ -461,8 +461,8 @@ async function collectSkillsFromRoot(
       agentShortCodes: [],
       scope,
       projectName: scope === "project" ? getProjectNameForPath(skillDir) : null,
-      hasSupportingFiles: supportingFiles.length > 0,
-      supportingFiles,
+      hasSupportingFiles: false,
+      supportingFiles: [],
       source: lockEntry?.source,
       sourceType: lockEntry?.sourceType,
       installedAt: lockEntry?.installedAt,
@@ -607,7 +607,7 @@ async function listInstalledSkillsInternal(): Promise<
 
         const skillMdPath = path.join(skillDir, "SKILL.md")
         const parsed = await parseSkillMd(skillMdPath)
-        const supportingFiles = await listSupportingFiles(skillDir)
+        const supportingFiles: SupportingFile[] = []
         const scope = getScopeForPath(skillDir)
         const projectName =
           scope === "project" ? getProjectNameForPath(skillDir) : null
@@ -631,8 +631,8 @@ async function listInstalledSkillsInternal(): Promise<
             agentShortCodes: [agent.shortCode],
             scope,
             projectName,
-            hasSupportingFiles: supportingFiles.length > 0,
-            supportingFiles,
+            hasSupportingFiles: false,
+            supportingFiles: [],
             source: lockEntry?.source,
             sourceType: lockEntry?.sourceType,
             installedAt: lockEntry?.installedAt,
