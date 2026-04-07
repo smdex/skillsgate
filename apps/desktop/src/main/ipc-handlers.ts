@@ -561,7 +561,9 @@ async function detectAgents(): Promise<
 
 /** Scan all detected agents for installed skills, merging with lock file data.
  *  Returns the full internal shape including folderName (needed for caching). */
-async function listInstalledSkillsInternal(): Promise<
+async function listInstalledSkillsInternal(
+  opts: { skipCustomPaths?: boolean } = {},
+): Promise<
   Array<{
     name: string
     description: string
@@ -662,12 +664,14 @@ async function listInstalledSkillsInternal(): Promise<
     }
   }
 
-  const customScanPaths = settingsStore?.get<string[]>(CUSTOM_SCAN_PATHS_KEY, []) ?? []
-  for (const customPath of customScanPaths) {
-    const collected = await collectSkillsFromRoot(customPath, "custom")
-    for (const item of collected) {
-      if (!skillMap.has(item.canonicalPath)) {
-        skillMap.set(item.canonicalPath, item)
+  if (!opts.skipCustomPaths) {
+    const customScanPaths = settingsStore?.get<string[]>(CUSTOM_SCAN_PATHS_KEY, []) ?? []
+    for (const customPath of customScanPaths) {
+      const collected = await collectSkillsFromRoot(customPath, "custom")
+      for (const item of collected) {
+        if (!skillMap.has(item.canonicalPath)) {
+          skillMap.set(item.canonicalPath, item)
+        }
       }
     }
   }
@@ -709,7 +713,7 @@ export function setMainWindow(win: BrowserWindow): void {
  * Safe to call from anywhere (file watcher, IPC handler, etc.).
  */
 async function rescanAndCache() {
-  const raw = await listInstalledSkillsInternal()
+  const raw = await listInstalledSkillsInternal({ skipCustomPaths: true })
   saveCachedSkills(raw)
 
   const skills = toRendererSkills(raw)
