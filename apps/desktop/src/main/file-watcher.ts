@@ -2,7 +2,7 @@ import { BrowserWindow } from "electron"
 import fs from "node:fs"
 import path from "node:path"
 import os from "node:os"
-import { rescanAndCache, detectAgents, agentRegistry } from "./ipc-handlers"
+import { rescanAndCache, rescanSingleSkill, detectAgents, agentRegistry } from "./ipc-handlers"
 
 const DEBOUNCE_MS = 500
 const CANONICAL_DIR = path.join(os.homedir(), ".agents", "skills")
@@ -17,6 +17,8 @@ const CANONICAL_DIR = path.join(os.homedir(), ".agents", "skills")
 export class SkillsFileWatcher {
   private watchers: fs.FSWatcher[] = []
   private debounceTimer: ReturnType<typeof setTimeout> | null = null
+  // undefined = no pending event, string = single changed path, null = ambiguous (full rescan)
+  private pendingPath: string | null | undefined = undefined
   private mainWindow: BrowserWindow
 
   constructor(mainWindow: BrowserWindow) {
@@ -24,17 +26,26 @@ export class SkillsFileWatcher {
   }
 
   async start(): Promise<void> {
-    // Collect all directories to watch
     const dirsToWatch = new Set<string>()
 
     // Always watch the canonical skills directory
-    dirsToWatch.add(CANONICAL_DIR)
+    try {
+      const realCanonical = await fs.promises.realpath(CANONICAL_DIR)
+      dirsToWatch.add(realCanonical)
+    } catch {
+      dirsToWatch.add(CANONICAL_DIR)
+    }
 
-    // Watch each detected agent's globalSkillsDir
+    // For each agent, only watch if it resolves to a different real path
     const detected = await detectAgents()
     for (const agent of detected) {
       const entry = agentRegistry[agent.name]
-      if (entry) {
+      if (!entry) continue
+      try {
+        const realPath = await fs.promises.realpath(entry.globalSkillsDir)
+        dirsToWatch.add(realPath)
+      } catch {
+        // Dir doesn't exist yet -- watch the expected path
         dirsToWatch.add(entry.globalSkillsDir)
       }
     }
@@ -58,8 +69,8 @@ export class SkillsFileWatcher {
       const watcher = fs.watch(
         dir,
         { recursive: true, persistent: false },
-        (_eventType, _filename) => {
-          this.scheduleRescan()
+        (_eventType, filename) => {
+          this.scheduleRescan(typeof filename === "string" ? filename : null)
         },
       )
 
@@ -78,17 +89,31 @@ export class SkillsFileWatcher {
     }
   }
 
-  private scheduleRescan(): void {
+  private scheduleRescan(changedPath: string | null): void {
+    // Track which path changed. If multiple different files change within
+    // the debounce window, fall back to a full rescan (pendingPath = null).
+    if (changedPath === null) {
+      this.pendingPath = null
+    } else if (this.pendingPath === undefined) {
+      this.pendingPath = changedPath
+    } else if (this.pendingPath !== null && this.pendingPath !== changedPath) {
+      this.pendingPath = null
+    }
+
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer)
     }
 
     this.debounceTimer = setTimeout(async () => {
+      const pathToRescan = this.pendingPath
       this.debounceTimer = null
+      this.pendingPath = undefined
       try {
-        // rescanAndCache performs the full scan, saves to SQLite,
-        // and pushes skills:updated to the renderer automatically.
-        await rescanAndCache()
+        if (typeof pathToRescan === "string") {
+          await rescanSingleSkill(pathToRescan)
+        } else {
+          await rescanAndCache({ skipCustomPaths: true })
+        }
       } catch (err) {
         console.error("Rescan after file change failed:", err)
       }
@@ -100,6 +125,7 @@ export class SkillsFileWatcher {
       clearTimeout(this.debounceTimer)
       this.debounceTimer = null
     }
+    this.pendingPath = undefined
 
     for (const watcher of this.watchers) {
       try {

@@ -1478,7 +1478,7 @@ export function Home() {
     return cleanup
   }, [])
 
-  // Load skill content when a skill is selected
+  // Load skill content and supporting files when a skill is selected
   useEffect(() => {
     if (!selectedSkill) {
       setSkillContent(null)
@@ -1490,9 +1490,20 @@ export function Home() {
 
     async function loadContent() {
       try {
-        const raw = await electronAPI.readSkillContent(selectedSkill!.path)
+        const [raw, files] = await Promise.all([
+          electronAPI.readSkillContent(selectedSkill!.path),
+          electronAPI.listSupportingFiles(selectedSkill!.path),
+        ])
         if (!cancelled) {
           setSkillContent(raw || null)
+          // Merge lazily-loaded supporting files into the skill object
+          setSkills((prev) =>
+            prev.map((s) =>
+              s.canonicalPath === selectedSkill!.canonicalPath
+                ? { ...s, hasSupportingFiles: files.length > 0, supportingFiles: files }
+                : s,
+            ),
+          )
         }
       } catch (err) {
         console.error("Failed to load skill content:", err)

@@ -288,6 +288,14 @@ const PROJECT_PROBES = [
   { subpath: ".agents/skills" },
 ]
 
+// ---------------------------------------------------------------------------
+// Agent detection cache
+// ---------------------------------------------------------------------------
+
+let cachedAgents: Array<{ name: string; displayName: string; shortCode: string }> | null = null
+let agentCacheTime = 0
+const AGENT_CACHE_TTL_MS = 60_000 // Re-detect at most once per minute
+
 async function parseSkillMd(filePath: string): Promise<ParsedSkill | null> {
   try {
     const raw = await fs.readFile(filePath, "utf-8")
@@ -450,7 +458,6 @@ async function collectSkillsFromRoot(
     const parsed = await parseSkillMd(skillMdPath)
     const folderName = path.basename(skillDir)
     const lockEntry = lock.skills[folderName]
-    const supportingFiles = await listSupportingFiles(canonicalPath)
 
     results.push({
       name: parsed?.name || folderName,
@@ -461,8 +468,8 @@ async function collectSkillsFromRoot(
       agentShortCodes: [],
       scope,
       projectName: scope === "project" ? getProjectNameForPath(skillDir) : null,
-      hasSupportingFiles: supportingFiles.length > 0,
-      supportingFiles,
+      hasSupportingFiles: false,
+      supportingFiles: [],
       source: lockEntry?.source,
       sourceType: lockEntry?.sourceType,
       installedAt: lockEntry?.installedAt,
@@ -522,6 +529,11 @@ function sanitizeName(name: string): string {
 async function detectAgents(): Promise<
   Array<{ name: string; displayName: string; shortCode: string }>
 > {
+  const now = Date.now()
+  if (cachedAgents && now - agentCacheTime < AGENT_CACHE_TTL_MS) {
+    return cachedAgents
+  }
+
   const detected: Array<{
     name: string
     displayName: string
@@ -540,12 +552,17 @@ async function detectAgents(): Promise<
       // Skip agents that fail detection
     }
   }
+
+  cachedAgents = detected
+  agentCacheTime = now
   return detected
 }
 
 /** Scan all detected agents for installed skills, merging with lock file data.
  *  Returns the full internal shape including folderName (needed for caching). */
-async function listInstalledSkillsInternal(): Promise<
+async function listInstalledSkillsInternal(
+  opts: { skipCustomPaths?: boolean } = {},
+): Promise<
   Array<{
     name: string
     description: string
@@ -607,7 +624,7 @@ async function listInstalledSkillsInternal(): Promise<
 
         const skillMdPath = path.join(skillDir, "SKILL.md")
         const parsed = await parseSkillMd(skillMdPath)
-        const supportingFiles = await listSupportingFiles(skillDir)
+        const supportingFiles: SupportingFile[] = []
         const scope = getScopeForPath(skillDir)
         const projectName =
           scope === "project" ? getProjectNameForPath(skillDir) : null
@@ -631,8 +648,8 @@ async function listInstalledSkillsInternal(): Promise<
             agentShortCodes: [agent.shortCode],
             scope,
             projectName,
-            hasSupportingFiles: supportingFiles.length > 0,
-            supportingFiles,
+            hasSupportingFiles: false,
+            supportingFiles: [],
             source: lockEntry?.source,
             sourceType: lockEntry?.sourceType,
             installedAt: lockEntry?.installedAt,
@@ -646,12 +663,14 @@ async function listInstalledSkillsInternal(): Promise<
     }
   }
 
-  const customScanPaths = settingsStore?.get<string[]>(CUSTOM_SCAN_PATHS_KEY, []) ?? []
-  for (const customPath of customScanPaths) {
-    const collected = await collectSkillsFromRoot(customPath, "custom")
-    for (const item of collected) {
-      if (!skillMap.has(item.canonicalPath)) {
-        skillMap.set(item.canonicalPath, item)
+  if (!opts.skipCustomPaths) {
+    const customScanPaths = settingsStore?.get<string[]>(CUSTOM_SCAN_PATHS_KEY, []) ?? []
+    for (const customPath of customScanPaths) {
+      const collected = await collectSkillsFromRoot(customPath, "custom")
+      for (const item of collected) {
+        if (!skillMap.has(item.canonicalPath)) {
+          skillMap.set(item.canonicalPath, item)
+        }
       }
     }
   }
@@ -687,13 +706,14 @@ export function setMainWindow(win: BrowserWindow): void {
 }
 
 /**
- * Run a full filesystem scan, persist results to the SQLite cache,
+ * Run a filesystem scan, persist results to the SQLite cache,
  * and push the updated list to the renderer via the skills:updated event.
  *
- * Safe to call from anywhere (file watcher, IPC handler, etc.).
+ * Pass { skipCustomPaths: true } from the file watcher to avoid
+ * walking potentially large custom scan directories on every change.
  */
-async function rescanAndCache() {
-  const raw = await listInstalledSkillsInternal()
+async function rescanAndCache(opts: { skipCustomPaths?: boolean } = {}) {
+  const raw = await listInstalledSkillsInternal({ skipCustomPaths: opts.skipCustomPaths })
   saveCachedSkills(raw)
 
   const skills = toRendererSkills(raw)
@@ -703,6 +723,93 @@ async function rescanAndCache() {
   }
 
   return skills
+}
+
+/**
+ * Re-scan a single skill by folder name across all agent directories.
+ * Falls back to full rescan if the skill can't be identified.
+ */
+async function rescanSingleSkill(changedPath: string): Promise<void> {
+  // Extract the skill folder name from the changed path.
+  // Changed paths look like: "skill-folder-name/SKILL.md" or "skill-folder-name"
+  const segments = changedPath.split(path.sep).filter(Boolean)
+  const skillFolderName = segments[0]
+
+  if (!skillFolderName || skillFolderName.startsWith(".")) {
+    // Ambiguous change (root-level or hidden dir) -- full rescan
+    await rescanAndCache()
+    return
+  }
+
+  // Load current cache
+  const cached = loadCachedSkills()
+  const existingIdx = cached.findIndex((s) => s.folderName === skillFolderName)
+
+  // Re-scan just this skill across all agents
+  const lock = await readSkillLock()
+  const agents: string[] = []
+  const agentShortCodes: string[] = []
+  let resolvedDir: string | null = null
+  let parsed: ParsedSkill | null = null
+
+  for (const agent of Object.values(agentRegistry)) {
+    const skillDir = path.join(agent.globalSkillsDir, skillFolderName)
+    try {
+      const realPath = await fs.realpath(skillDir)
+      await fs.stat(realPath)
+      if (!resolvedDir) {
+        resolvedDir = realPath
+        const skillMdPath = path.join(realPath, "SKILL.md")
+        parsed = await parseSkillMd(skillMdPath)
+      }
+      agents.push(agent.displayName)
+      agentShortCodes.push(agent.shortCode)
+    } catch {
+      // Not present in this agent
+    }
+  }
+
+  if (resolvedDir && parsed && agents.length > 0) {
+    const lockEntry = lock.skills[skillFolderName]
+    const scope = getScopeForPath(resolvedDir)
+    const updatedSkill = {
+      name: parsed.name,
+      description: parsed.description,
+      path: resolvedDir,
+      canonicalPath: resolvedDir,
+      agents,
+      agentShortCodes,
+      scope,
+      projectName: scope === "project" ? getProjectNameForPath(resolvedDir) : null,
+      hasSupportingFiles: false,
+      supportingFiles: [] as SupportingFile[],
+      source: lockEntry?.source,
+      sourceType: lockEntry?.sourceType,
+      installedAt: lockEntry?.installedAt,
+      updatedAt: lockEntry?.updatedAt,
+      folderName: skillFolderName,
+    }
+
+    if (existingIdx >= 0) {
+      cached[existingIdx] = updatedSkill
+    } else {
+      cached.push(updatedSkill)
+    }
+  } else if (existingIdx >= 0) {
+    // Skill was deleted
+    cached.splice(existingIdx, 1)
+  } else {
+    // Can't resolve -- full rescan
+    await rescanAndCache()
+    return
+  }
+
+  saveCachedSkills(cached)
+
+  const skills = toRendererSkills(cached)
+  if (_mainWindow && !_mainWindow.isDestroyed()) {
+    _mainWindow.webContents.send("skills:updated", skills)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1698,4 +1805,4 @@ Add your skill instructions here.
 }
 
 // Export for use by file-watcher and main process
-export { listInstalledSkills, rescanAndCache, detectAgents, agentRegistry }
+export { listInstalledSkills, rescanAndCache, rescanSingleSkill, detectAgents, agentRegistry }
