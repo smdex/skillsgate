@@ -10,7 +10,7 @@ import {
 import { List } from "react-window"
 import { marked } from "marked"
 import { electronAPI } from "../lib/electron-api"
-import { SkillEditor } from "../components/skill-editor"
+import { SkillEditor, type SkillEditorHandle } from "../components/skill-editor"
 import { AgentLogo, AgentLogoRow } from "../components/agent-logo"
 
 // Map display names to registry keys
@@ -929,16 +929,15 @@ function RightPanel({
   onCreateCollection,
 }: RightPanelProps) {
   const [editMode, setEditMode] = useState(false)
-  const [editContent, setEditContent] = useState("")
   const [supportingPreview, setSupportingPreview] = useState("")
   const [selectedSupportingFile, setSelectedSupportingFile] = useState<string | null>(null)
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [showRemoveDialog, setShowRemoveDialog] = useState(false)
+  const editorRef = useRef<SkillEditorHandle | null>(null)
 
   // Reset edit mode when skill changes
   useEffect(() => {
     setEditMode(false)
-    setEditContent("")
     setSupportingPreview("")
     setSelectedSupportingFile(null)
     setSaveStatus("idle")
@@ -978,20 +977,20 @@ function RightPanel({
   const isLocalSkill = !!(skill?.path)
 
   const handleEditToggle = () => {
-    if (!editMode && content) {
-      setEditContent(content)
+    if (!editMode) {
       setSaveStatus("idle")
     }
     setEditMode(!editMode)
   }
 
-  const handleSave = async () => {
+  const handleSave = async (editorContent?: string) => {
     if (!skill?.path) return
+    const nextContent = editorContent ?? editorRef.current?.getValue() ?? content ?? ""
     setSaveStatus("saving")
     try {
       const filePath = skill.path + "/SKILL.md"
-      await electronAPI.writeSkillContent(filePath, editContent)
-      onContentSaved(editContent)
+      await electronAPI.writeSkillContent(filePath, nextContent)
+      onContentSaved(nextContent)
       setSaveStatus("saved")
       setTimeout(() => {
         setEditMode(false)
@@ -1004,7 +1003,6 @@ function RightPanel({
   }
 
   const handleCancel = () => {
-    setEditContent("")
     setEditMode(false)
     setSaveStatus("idle")
   }
@@ -1197,8 +1195,8 @@ function RightPanel({
             <div className="flex flex-col flex-1 min-h-0">
               <div className="flex-1 min-h-0">
                 <SkillEditor
-                  content={editContent}
-                  onChange={setEditContent}
+                  ref={editorRef}
+                  content={content ?? ""}
                   onSave={handleSave}
                 />
               </div>

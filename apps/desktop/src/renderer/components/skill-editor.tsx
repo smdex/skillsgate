@@ -1,11 +1,20 @@
-import { useRef, useEffect, useCallback } from "react"
+import {
+  forwardRef,
+  useRef,
+  useEffect,
+  useCallback,
+  useImperativeHandle,
+  useMemo,
+} from "react"
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from "@codemirror/view"
 import { EditorState } from "@codemirror/state"
 import { markdown } from "@codemirror/lang-markdown"
 import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language"
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands"
-import { searchKeymap, highlightSelectionMatches } from "@codemirror/search"
-import { languages } from "@codemirror/language-data"
+import { searchKeymap } from "@codemirror/search"
+
+const LARGE_DOCUMENT_CHAR_THRESHOLD = 30_000
+const LARGE_DOCUMENT_LINE_THRESHOLD = 800
 
 const theme = EditorView.theme({
   "&": {
@@ -43,6 +52,7 @@ const theme = EditorView.theme({
   },
   ".cm-scroller": {
     overflow: "auto",
+    overscrollBehavior: "contain",
   },
   "&.cm-focused .cm-selectionBackground": {
     backgroundColor: "#a8a29e33 !important",
@@ -54,24 +64,43 @@ const theme = EditorView.theme({
 
 interface SkillEditorProps {
   content: string
-  onChange: (content: string) => void
-  onSave: () => void
+  onChange?: (content: string) => void
+  onSave: (content: string) => void
 }
 
-export function SkillEditor({ content, onChange, onSave }: SkillEditorProps) {
+export interface SkillEditorHandle {
+  getValue: () => string
+  focus: () => void
+}
+
+export const SkillEditor = forwardRef<SkillEditorHandle, SkillEditorProps>(function SkillEditor(
+  { content, onChange, onSave }: SkillEditorProps,
+  ref,
+) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
   const onSaveRef = useRef(onSave)
-  const internalChange = useRef(false)
 
   onChangeRef.current = onChange
   onSaveRef.current = onSave
+  const isLargeDocument = useMemo(() => {
+    if (content.length >= LARGE_DOCUMENT_CHAR_THRESHOLD) {
+      return true
+    }
+    return content.split("\n").length >= LARGE_DOCUMENT_LINE_THRESHOLD
+  }, [content])
+
+  useImperativeHandle(ref, () => ({
+    getValue: () => viewRef.current?.state.doc.toString() ?? content,
+    focus: () => viewRef.current?.focus(),
+  }), [content])
 
   const saveKeymap = useCallback(() => keymap.of([{
     key: "Mod-s",
     run: () => {
-      onSaveRef.current()
+      const currentContent = viewRef.current?.state.doc.toString() ?? ""
+      onSaveRef.current(currentContent)
       return true
     },
   }]), [])
@@ -79,27 +108,33 @@ export function SkillEditor({ content, onChange, onSave }: SkillEditorProps) {
   useEffect(() => {
     if (!containerRef.current) return
 
+    const extensions = [
+      EditorView.contentAttributes.of({
+        spellcheck: "false",
+        autocorrect: "off",
+        autocapitalize: "off",
+        "data-gramm": "false",
+      }),
+      lineNumbers(),
+      history(),
+      keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
+      saveKeymap(),
+      theme,
+      EditorView.updateListener.of((update) => {
+        if (update.docChanged) {
+          onChangeRef.current?.(update.state.doc.toString())
+        }
+      }),
+    ]
+
+    if (!isLargeDocument) {
+      extensions.splice(1, 0, highlightActiveLine(), highlightActiveLineGutter())
+      extensions.push(markdown(), syntaxHighlighting(defaultHighlightStyle, { fallback: true }))
+    }
+
     const state = EditorState.create({
       doc: content,
-      extensions: [
-        lineNumbers(),
-        highlightActiveLine(),
-        highlightActiveLineGutter(),
-        history(),
-        markdown({ codeLanguages: languages }),
-        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-        highlightSelectionMatches(),
-        keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
-        saveKeymap(),
-        theme,
-        EditorView.lineWrapping,
-        EditorView.updateListener.of((update) => {
-          if (update.docChanged) {
-            internalChange.current = true
-            onChangeRef.current(update.state.doc.toString())
-          }
-        }),
-      ],
+      extensions,
     })
 
     const view = new EditorView({
@@ -114,15 +149,10 @@ export function SkillEditor({ content, onChange, onSave }: SkillEditorProps) {
       viewRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [content, isLargeDocument])
 
   // Sync external content changes
   useEffect(() => {
-    if (internalChange.current) {
-      internalChange.current = false
-      return
-    }
-
     const view = viewRef.current
     if (!view) return
 
@@ -143,4 +173,4 @@ export function SkillEditor({ content, onChange, onSave }: SkillEditorProps) {
       className="h-full"
     />
   )
-}
+})
