@@ -1,14 +1,24 @@
-import { contextBridge, ipcRenderer } from "electron"
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron"
 
 async function invokeWithLogging<T>(channel: string, ...args: unknown[]): Promise<T> {
-  console.log(`[preload] invoking ${channel}`, ...args)
   try {
-    const result = await ipcRenderer.invoke(channel, ...args)
-    console.log(`[preload] ${channel} resolved`, result)
-    return result as T
+    return await ipcRenderer.invoke(channel, ...args) as T
   } catch (error) {
     console.error(`[preload] ${channel} failed`, error)
     throw error
+  }
+}
+
+function subscribe<T>(
+  channel: string,
+  callback: (payload: T) => void,
+): () => void {
+  const listener = (_event: IpcRendererEvent, payload: T) => {
+    callback(payload)
+  }
+  ipcRenderer.on(channel, listener)
+  return () => {
+    ipcRenderer.removeListener(channel, listener)
   }
 }
 
@@ -97,15 +107,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Events
   onSkillsUpdated: (callback: (skills: unknown[]) => void) => {
-    ipcRenderer.on("skills:updated", (_event, skills) => callback(skills))
-    return () => {
-      ipcRenderer.removeAllListeners("skills:updated")
-    }
+    return subscribe("skills:updated", callback)
   },
   onUpdateState: (callback: (state: unknown) => void) => {
-    ipcRenderer.on("updates:state", (_event, state) => callback(state))
-    return () => {
-      ipcRenderer.removeAllListeners("updates:state")
-    }
+    return subscribe("updates:state", callback)
   },
 })

@@ -1,4 +1,12 @@
-import { useEffect, useState, useMemo, useCallback, useRef, memo } from "react"
+import {
+  useDeferredValue,
+  useEffect,
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+  memo,
+} from "react"
 import { List } from "react-window"
 import { marked } from "marked"
 import { electronAPI } from "../lib/electron-api"
@@ -358,6 +366,8 @@ function LeftSidebar({
   )
 }
 
+const MemoizedLeftSidebar = memo(LeftSidebar)
+
 // --------------------------------------------------------------------------
 // Virtualized Skill List Row
 // --------------------------------------------------------------------------
@@ -368,7 +378,7 @@ interface SkillRowProps {
   skills: InstalledSkill[]
   multiSelected: Set<string>
   isMultiSelectActive: boolean
-  selectedSkillName: string | null
+  selectedSkillPath: string | null
   dragSkill: DragSkillPayload | null
   onSelectSkill: (skill: InstalledSkill) => void
   onMultiSelectToggle: (skill: InstalledSkill, e: React.MouseEvent) => void
@@ -382,7 +392,7 @@ const SkillListRow = memo(function SkillListRow({
   skills,
   multiSelected,
   isMultiSelectActive,
-  selectedSkillName,
+  selectedSkillPath,
   dragSkill,
   onSelectSkill,
   onMultiSelectToggle,
@@ -416,7 +426,7 @@ const SkillListRow = memo(function SkillListRow({
         className={`flex items-center w-full px-2.5 py-2 rounded-md text-left transition-colors ${
           isMultiChecked
             ? "bg-accent/10 text-foreground ring-1 ring-accent/30"
-            : selectedSkillName === skill.name && !isMultiSelectActive
+            : selectedSkillPath === skill.canonicalPath && !isMultiSelectActive
               ? "bg-surface-hover text-foreground"
               : dragSkill?.canonicalPath === skill.canonicalPath
                 ? "opacity-60 ring-1 ring-accent/40"
@@ -461,7 +471,7 @@ interface MiddlePanelProps {
   filteredSkills: InstalledSkill[]
   searchQuery: string
   onSearchChange: (q: string) => void
-  selectedSkillName: string | null
+  selectedSkillPath: string | null
   onSelectSkill: (skill: InstalledSkill) => void
   selectedAgent: string | null
   selectedCollection: string | null
@@ -487,7 +497,7 @@ function MiddlePanel({
   filteredSkills,
   searchQuery,
   onSearchChange,
-  selectedSkillName,
+  selectedSkillPath,
   onSelectSkill,
   selectedAgent,
   selectedCollection,
@@ -509,6 +519,30 @@ function MiddlePanel({
   const [showCollectionDropdown, setShowCollectionDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const isMultiSelectActive = multiSelected.size > 0
+  const rowProps = useMemo(
+    () => ({
+      skills: filteredSkills,
+      multiSelected,
+      isMultiSelectActive,
+      selectedSkillPath,
+      dragSkill,
+      onSelectSkill,
+      onMultiSelectToggle,
+      onDragSkillStart,
+      onDragSkillEnd,
+    }),
+    [
+      filteredSkills,
+      multiSelected,
+      isMultiSelectActive,
+      selectedSkillPath,
+      dragSkill,
+      onSelectSkill,
+      onMultiSelectToggle,
+      onDragSkillStart,
+      onDragSkillEnd,
+    ],
+  )
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -625,17 +659,7 @@ function MiddlePanel({
             rowCount={filteredSkills.length}
             rowHeight={36}
             rowComponent={SkillListRow}
-            rowProps={{
-              skills: filteredSkills,
-              multiSelected,
-              isMultiSelectActive,
-              selectedSkillName,
-              dragSkill,
-              onSelectSkill,
-              onMultiSelectToggle,
-              onDragSkillStart,
-              onDragSkillEnd,
-            }}
+            rowProps={rowProps}
             overscanCount={10}
           />
         )}
@@ -711,6 +735,8 @@ function MiddlePanel({
     </div>
   )
 }
+
+const MemoizedMiddlePanel = memo(MiddlePanel)
 
 // --------------------------------------------------------------------------
 // Bulk Delete Confirmation Dialog
@@ -883,6 +909,7 @@ interface RightPanelProps {
   skill: InstalledSkill | null
   content: string | null
   contentLoading: boolean
+  supportingFiles: InstalledSkill["supportingFiles"]
   collections: Record<string, string[]>
   onContentSaved: (newContent: string) => void
   onSkillRemoved: () => void
@@ -890,7 +917,17 @@ interface RightPanelProps {
   onCreateCollection: () => void
 }
 
-function RightPanel({ skill, content, contentLoading, collections, onContentSaved, onSkillRemoved, onToggleCollection, onCreateCollection }: RightPanelProps) {
+function RightPanel({
+  skill,
+  content,
+  contentLoading,
+  supportingFiles,
+  collections,
+  onContentSaved,
+  onSkillRemoved,
+  onToggleCollection,
+  onCreateCollection,
+}: RightPanelProps) {
   const [editMode, setEditMode] = useState(false)
   const [editContent, setEditContent] = useState("")
   const [supportingPreview, setSupportingPreview] = useState("")
@@ -906,16 +943,16 @@ function RightPanel({ skill, content, contentLoading, collections, onContentSave
     setSelectedSupportingFile(null)
     setSaveStatus("idle")
     setShowRemoveDialog(false)
-  }, [skill?.name])
+  }, [skill?.canonicalPath])
 
   useEffect(() => {
-    if (!skill?.path || !skill.supportingFiles.length) {
+    if (!skill?.path || supportingFiles.length === 0) {
       setSupportingPreview("")
       setSelectedSupportingFile(null)
       return
     }
 
-    const firstFile = skill.supportingFiles[0]?.relativePath ?? null
+    const firstFile = supportingFiles[0]?.relativePath ?? null
     if (!firstFile) return
 
     let cancelled = false
@@ -936,7 +973,7 @@ function RightPanel({ skill, content, contentLoading, collections, onContentSave
     return () => {
       cancelled = true
     }
-  }, [skill?.path, skill?.supportingFiles])
+  }, [skill?.path, supportingFiles])
 
   const isLocalSkill = !!(skill?.path)
 
@@ -1106,7 +1143,7 @@ function RightPanel({ skill, content, contentLoading, collections, onContentSave
                 </span>
               )}
               <span className="rounded border border-border px-2 py-0.5">
-                supporting files: {skill.supportingFiles.length}
+                supporting files: {supportingFiles.length}
               </span>
             </div>
             {skill.source && (
@@ -1197,7 +1234,7 @@ function RightPanel({ skill, content, contentLoading, collections, onContentSave
             </p>
           )}
 
-          {skill.supportingFiles.length > 0 && !editMode && (
+          {supportingFiles.length > 0 && !editMode && (
             <>
               <hr className="border-border my-6" />
               <div className="grid grid-cols-[220px_1fr] gap-4">
@@ -1206,7 +1243,7 @@ function RightPanel({ skill, content, contentLoading, collections, onContentSave
                     Supporting Files
                   </h2>
                   <div className="flex flex-col gap-1">
-                    {skill.supportingFiles.map((file) => (
+                    {supportingFiles.map((file) => (
                       <button
                         key={file.relativePath}
                         onClick={() => handleSupportingFileSelect(file.relativePath)}
@@ -1248,6 +1285,8 @@ function RightPanel({ skill, content, contentLoading, collections, onContentSave
     </div>
   )
 }
+
+const MemoizedRightPanel = memo(RightPanel)
 
 function CreateSkillDialog({
   open,
@@ -1420,11 +1459,15 @@ export function Home() {
   const [skills, setSkills] = useState<InstalledSkill[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
+  const deferredSearchQuery = useDeferredValue(searchQuery)
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
   const [activeFilter, setActiveFilter] = useState<"all" | "favorites">("all")
-  const [selectedSkill, setSelectedSkill] = useState<InstalledSkill | null>(null)
+  const [selectedSkillPath, setSelectedSkillPath] = useState<string | null>(null)
   const [skillContent, setSkillContent] = useState<string | null>(null)
   const [contentLoading, setContentLoading] = useState(false)
+  const [selectedSupportingFiles, setSelectedSupportingFiles] = useState<
+    InstalledSkill["supportingFiles"]
+  >([])
   const [collections, setCollections] = useState<Record<string, string[]>>({})
   const [selectedCollection, setSelectedCollection] = useState<string | null>(null)
   const [defaultAgents, setDefaultAgents] = useState<string[]>([])
@@ -1437,6 +1480,10 @@ export function Home() {
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false)
   const [pendingBulkCollection, setPendingBulkCollection] = useState(false)
   const skillListRef = useRef<HTMLDivElement>(null)
+  const contentCacheRef = useRef(new Map<string, string | null>())
+  const supportingFilesCacheRef = useRef(
+    new Map<string, InstalledSkill["supportingFiles"]>(),
+  )
   const [collectionDialog, setCollectionDialog] = useState<{
     open: boolean
     mode: "create" | "rename"
@@ -1448,20 +1495,29 @@ export function Home() {
     initialName: "",
     targetName: null,
   })
+  const selectedSkill = useMemo(
+    () =>
+      selectedSkillPath
+        ? skills.find((skill) => skill.canonicalPath === selectedSkillPath) ?? null
+        : null,
+    [selectedSkillPath, skills],
+  )
 
   // Load agents and skills on mount
   useEffect(() => {
     async function load() {
       try {
-        const [detectedAgents, installedSkills] = await Promise.all([
+        const [detectedAgents, installedSkills, savedCollections, savedDefaultAgents] =
+          await Promise.all([
           electronAPI.detectAgents(),
           electronAPI.listInstalled(),
+          electronAPI.settingsGet("collections.skills", {} as Record<string, string[]>),
+          electronAPI.settingsGet("install.defaultAgents", [] as string[]),
         ])
         setAgents(detectedAgents)
         setSkills(installedSkills)
-        const allSettings = await electronAPI.settingsAll()
-        setCollections((allSettings["collections.skills"] as Record<string, string[]>) || {})
-        setDefaultAgents((allSettings["install.defaultAgents"] as string[]) || [])
+        setCollections(savedCollections || {})
+        setDefaultAgents(savedDefaultAgents || [])
       } catch (err) {
         console.error("Failed to load installed skills:", err)
       } finally {
@@ -1472,6 +1528,8 @@ export function Home() {
     load()
 
     const cleanup = electronAPI.onSkillsUpdated((updatedSkills) => {
+      contentCacheRef.current.clear()
+      supportingFilesCacheRef.current.clear()
       setSkills(updatedSkills)
     })
 
@@ -1482,33 +1540,48 @@ export function Home() {
   useEffect(() => {
     if (!selectedSkill) {
       setSkillContent(null)
+      setSelectedSupportingFiles([])
+      setContentLoading(false)
       return
     }
 
     let cancelled = false
+    const cacheKey = selectedSkill.canonicalPath
+    const hasCachedContent = contentCacheRef.current.has(cacheKey)
+    const cachedContent = contentCacheRef.current.get(cacheKey) ?? null
+    const cachedFiles = supportingFilesCacheRef.current.get(cacheKey)
+
+    setSkillContent(hasCachedContent ? cachedContent : null)
+    setSelectedSupportingFiles(cachedFiles ?? [])
+
+    if (hasCachedContent && cachedFiles) {
+      setContentLoading(false)
+      return
+    }
+
     setContentLoading(true)
 
     async function loadContent() {
       try {
         const [raw, files] = await Promise.all([
-          electronAPI.readSkillContent(selectedSkill!.path),
-          electronAPI.listSupportingFiles(selectedSkill!.path),
+          hasCachedContent
+            ? Promise.resolve(cachedContent)
+            : electronAPI.readSkillContent(selectedSkill.path),
+          cachedFiles
+            ? Promise.resolve(cachedFiles)
+            : electronAPI.listSupportingFiles(selectedSkill.path),
         ])
         if (!cancelled) {
           setSkillContent(raw || null)
-          // Merge lazily-loaded supporting files into the skill object
-          setSkills((prev) =>
-            prev.map((s) =>
-              s.canonicalPath === selectedSkill!.canonicalPath
-                ? { ...s, hasSupportingFiles: files.length > 0, supportingFiles: files }
-                : s,
-            ),
-          )
+          setSelectedSupportingFiles(files)
+          contentCacheRef.current.set(cacheKey, raw || null)
+          supportingFilesCacheRef.current.set(cacheKey, files)
         }
       } catch (err) {
         console.error("Failed to load skill content:", err)
         if (!cancelled) {
           setSkillContent(null)
+          setSelectedSupportingFiles([])
         }
       } finally {
         if (!cancelled) {
@@ -1523,6 +1596,14 @@ export function Home() {
       cancelled = true
     }
   }, [selectedSkill])
+
+  useEffect(() => {
+    if (selectedSkillPath && !selectedSkill) {
+      setSelectedSkillPath(null)
+      setSkillContent(null)
+      setSelectedSupportingFiles([])
+    }
+  }, [selectedSkill, selectedSkillPath])
 
   // Count skills per agent
   const agentSkillCounts = useMemo(() => {
@@ -1548,8 +1629,8 @@ export function Home() {
       result = result.filter((s) => s.agents.includes(selectedAgent))
     }
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim()
+    if (deferredSearchQuery.trim()) {
+      const q = deferredSearchQuery.toLowerCase().trim()
       result = result.filter(
         (s) =>
           s.name.toLowerCase().includes(q) ||
@@ -1565,7 +1646,7 @@ export function Home() {
     }
 
     return result
-  }, [skills, selectedAgent, searchQuery, selectedCollection, collections])
+  }, [skills, selectedAgent, deferredSearchQuery, selectedCollection, collections])
 
   const collectionCounts = useMemo(() => {
     const counts: Record<string, number> = {}
@@ -1582,7 +1663,7 @@ export function Home() {
   }, [agents, agentSkillCounts])
 
   const handleSelectSkill = useCallback((skill: InstalledSkill) => {
-    setSelectedSkill(skill)
+    setSelectedSkillPath(skill.canonicalPath)
   }, [])
 
   const handleClearFilters = useCallback(() => {
@@ -1594,11 +1675,15 @@ export function Home() {
 
   const handleContentSaved = useCallback((newContent: string) => {
     setSkillContent(newContent)
-  }, [])
+    if (selectedSkill) {
+      contentCacheRef.current.set(selectedSkill.canonicalPath, newContent)
+    }
+  }, [selectedSkill])
 
   const handleSkillRemoved = useCallback(async () => {
-    setSelectedSkill(null)
+    setSelectedSkillPath(null)
     setSkillContent(null)
+    setSelectedSupportingFiles([])
     try {
       const installedSkills = await electronAPI.listInstalled()
       setSkills(installedSkills)
@@ -1870,8 +1955,9 @@ export function Home() {
 
     // If the currently viewed skill was deleted, clear it
     if (selectedSkill && pathsToDelete.has(selectedSkill.canonicalPath)) {
-      setSelectedSkill(null)
+      setSelectedSkillPath(null)
       setSkillContent(null)
+      setSelectedSupportingFiles([])
     }
 
     setShowBulkDeleteDialog(false)
@@ -1884,7 +1970,7 @@ export function Home() {
     } catch (err) {
       console.error("Failed to refresh skills after bulk removal:", err)
     }
-  }, [multiSelected, skills, selectedSkill])
+  }, [multiSelected, selectedSkill, skills])
 
   const handleBulkRemoveFromAgent = useCallback(async () => {
     if (!selectedAgent) return
@@ -1905,8 +1991,9 @@ export function Home() {
     }
 
     if (selectedSkill && pathsToRemove.has(selectedSkill.canonicalPath)) {
-      setSelectedSkill(null)
+      setSelectedSkillPath(null)
       setSkillContent(null)
+      setSelectedSupportingFiles([])
     }
 
     setShowBulkDeleteDialog(false)
@@ -1919,7 +2006,7 @@ export function Home() {
     } catch (err) {
       console.error("Failed to refresh skills after bulk removal:", err)
     }
-  }, [multiSelected, skills, selectedAgent, selectedSkill])
+  }, [multiSelected, selectedAgent, selectedSkill, skills])
 
   // Keyboard shortcuts: Escape to clear selection, Cmd/Ctrl+A to select all
   useEffect(() => {
@@ -1947,10 +2034,23 @@ export function Home() {
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [multiSelected, filteredSkills])
 
+  const handleOpenCreateSkill = useCallback(() => {
+    setShowCreateDialog(true)
+  }, [])
+
+  const handleDragSkillStart = useCallback((skill: InstalledSkill) => {
+    setDragSkill({ name: skill.name, canonicalPath: skill.canonicalPath })
+  }, [])
+
+  const handleDragSkillEnd = useCallback(() => {
+    setDragSkill(null)
+    setDragOverTarget(null)
+  }, [])
+
   return (
     <div className="flex h-full">
       {/* Column 1: Left sidebar (filter panel) */}
-      <LeftSidebar
+      <MemoizedLeftSidebar
         totalSkillCount={skills.length}
         agentsWithSkills={agentsWithSkills}
         agentSkillCounts={agentSkillCounts}
@@ -1973,26 +2073,21 @@ export function Home() {
       />
 
       {/* Column 2: Skill list */}
-      <MiddlePanel
+      <MemoizedMiddlePanel
         loading={loading}
         skills={skills}
         filteredSkills={filteredSkills}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        selectedSkillName={selectedSkill?.name ?? null}
+        selectedSkillPath={selectedSkill?.canonicalPath ?? null}
         onSelectSkill={handleSelectSkill}
         selectedAgent={selectedAgent}
         selectedCollection={selectedCollection}
         onClearFilters={handleClearFilters}
-        onCreateSkill={() => setShowCreateDialog(true)}
+        onCreateSkill={handleOpenCreateSkill}
         dragSkill={dragSkill}
-        onDragSkillStart={(skill) =>
-          setDragSkill({ name: skill.name, canonicalPath: skill.canonicalPath })
-        }
-        onDragSkillEnd={() => {
-          setDragSkill(null)
-          setDragOverTarget(null)
-        }}
+        onDragSkillStart={handleDragSkillStart}
+        onDragSkillEnd={handleDragSkillEnd}
         multiSelected={multiSelected}
         onMultiSelectToggle={handleMultiSelectToggle}
         onMultiSelectAll={handleMultiSelectAll}
@@ -2005,10 +2100,11 @@ export function Home() {
       />
 
       {/* Column 3: Skill detail */}
-      <RightPanel
+      <MemoizedRightPanel
         skill={selectedSkill}
         content={skillContent}
         contentLoading={contentLoading}
+        supportingFiles={selectedSupportingFiles}
         collections={collections}
         onContentSaved={handleContentSaved}
         onSkillRemoved={handleSkillRemoved}

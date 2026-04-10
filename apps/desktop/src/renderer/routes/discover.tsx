@@ -1,4 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from "react"
+import {
+  memo,
+  useDeferredValue,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react"
 import { marked } from "marked"
 import { electronAPI } from "../lib/electron-api"
 
@@ -52,6 +60,21 @@ function renderMarkdown(raw: string): string {
     }
   }
   return sanitizeHtml(marked.parse(content) as string)
+}
+
+function dedupeCatalogSkills(skills: CatalogSkill[]): CatalogSkill[] {
+  const seen = new Set<string>()
+  const deduped: CatalogSkill[] = []
+
+  for (const skill of skills) {
+    if (seen.has(skill.id)) {
+      continue
+    }
+    seen.add(skill.id)
+    deduped.push(skill)
+  }
+
+  return deduped
 }
 
 // ---------------------------------------------------------------------------
@@ -186,7 +209,11 @@ interface SkillCardProps {
   installedNames: Set<string>
 }
 
-function SkillCard({ skill, onSelect, installedNames }: SkillCardProps) {
+const SkillCard = memo(function SkillCard({
+  skill,
+  onSelect,
+  installedNames,
+}: SkillCardProps) {
   const isInstalled = installedNames.has(skill.name.toLowerCase())
 
   return (
@@ -218,7 +245,7 @@ function SkillCard({ skill, onSelect, installedNames }: SkillCardProps) {
       </p>
     </button>
   )
-}
+})
 
 // ---------------------------------------------------------------------------
 // Agent Dropdown (multi-select for install targets)
@@ -328,18 +355,33 @@ function AgentDropdown({
 
 interface DetailPanelProps {
   skill: CatalogSkill
+  availableAgents: DetectedAgent[]
+  defaultAgents: string[]
   onClose: () => void
   installedNames: Set<string>
   installedSources: Set<string>
+  getCachedContent: (key: string) => string | null | undefined
+  cacheContent: (key: string, content: string | null) => void
   onInstall: (source: string, agentNames: string[]) => Promise<void>
 }
 
-function DetailPanel({ skill, onClose, installedNames, installedSources, onInstall }: DetailPanelProps) {
-  const [availableAgents, setAvailableAgents] = useState<DetectedAgent[]>([])
-  const [defaultAgents, setDefaultAgents] = useState<string[]>([])
+function DetailPanel({
+  skill,
+  availableAgents,
+  defaultAgents,
+  onClose,
+  installedNames,
+  installedSources,
+  getCachedContent,
+  cacheContent,
+  onInstall,
+}: DetailPanelProps) {
   const [selectedAgents, setSelectedAgents] = useState<string[]>([])
-  const [content, setContent] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const cacheKey = `${skill.source}:${skill.skillId}`
+  const [content, setContent] = useState<string | null>(
+    getCachedContent(cacheKey) ?? null,
+  )
+  const [loading, setLoading] = useState(getCachedContent(cacheKey) === undefined)
   const [installing, setInstalling] = useState(false)
   const [installError, setInstallError] = useState<string | null>(null)
   const [installed, setInstalled] = useState(
@@ -349,6 +391,13 @@ function DetailPanel({ skill, onClose, installedNames, installedSources, onInsta
 
   // Fetch SKILL.md content from GitHub raw
   useEffect(() => {
+    const cachedContent = getCachedContent(cacheKey)
+    if (cachedContent !== undefined) {
+      setContent(cachedContent)
+      setLoading(false)
+      return
+    }
+
     let cancelled = false
     setLoading(true)
     setContent(null)
@@ -357,10 +406,14 @@ function DetailPanel({ skill, onClose, installedNames, installedSources, onInsta
       .then((text) => {
         if (!cancelled) {
           setContent(text)
+          cacheContent(cacheKey, text)
         }
       })
       .catch(() => {
-        if (!cancelled) setContent(null)
+        if (!cancelled) {
+          setContent(null)
+          cacheContent(cacheKey, null)
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -369,7 +422,7 @@ function DetailPanel({ skill, onClose, installedNames, installedSources, onInsta
     return () => {
       cancelled = true
     }
-  }, [skill.source, skill.skillId])
+  }, [cacheContent, cacheKey, getCachedContent, skill.skillId, skill.source])
 
   // Sync installed state when prop changes
   useEffect(() => {
@@ -380,26 +433,13 @@ function DetailPanel({ skill, onClose, installedNames, installedSources, onInsta
   }, [installedNames, installedSources, skill.name, skill.source])
 
   useEffect(() => {
-    let cancelled = false
-    Promise.all([electronAPI.detectAgents(), electronAPI.settingsAll()])
-      .then(([agents, settings]) => {
-        if (cancelled) return
-        setAvailableAgents(agents)
-        const defaults = (settings["install.defaultAgents"] as string[]) || []
-        setDefaultAgents(defaults)
-        setSelectedAgents(defaults)
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAvailableAgents([])
-          setDefaultAgents([])
-          setSelectedAgents([])
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [skill.skillId])
+    setSelectedAgents(defaultAgents)
+  }, [defaultAgents, skill.skillId])
+
+  const renderedContent = useMemo(
+    () => (content ? renderMarkdown(content) : ""),
+    [content],
+  )
 
   async function handleInstall() {
     if (!skill.source) return
@@ -540,7 +580,7 @@ function DetailPanel({ skill, onClose, installedNames, installedSources, onInsta
           ) : content ? (
             <div
               className="skill-prose text-[13px]"
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
+              dangerouslySetInnerHTML={{ __html: renderedContent }}
             />
           ) : (
             <p className="text-sm text-muted">
@@ -562,8 +602,11 @@ export function Discover() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const deferredSearchQuery = useDeferredValue(searchQuery)
   const [activeQuery, setActiveQuery] = useState("skill")
   const [selectedSkill, setSelectedSkill] = useState<CatalogSkill | null>(null)
+  const [availableAgents, setAvailableAgents] = useState<DetectedAgent[]>([])
+  const [defaultAgents, setDefaultAgents] = useState<string[]>([])
   const [installedNames, setInstalledNames] = useState<Set<string>>(new Set())
   const [installedSources, setInstalledSources] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
@@ -571,6 +614,9 @@ export function Discover() {
 
   const LIMIT = 30
   const scrollRef = useRef<HTMLDivElement>(null)
+  const contentCacheRef = useRef(new Map<string, string | null>())
+  const inFlightPageKeysRef = useRef(new Set<string>())
+  const latestQueryRef = useRef("skill")
 
   function updateInstalledState(installed: InstalledSkill[]) {
     setInstalledNames(new Set(installed.map((s) => s.name.toLowerCase())))
@@ -586,16 +632,29 @@ export function Discover() {
   // Load installed skills to mark installed state
   useEffect(() => {
     const cleanup = electronAPI.onSkillsUpdated((updatedSkills) => {
-      console.log("[discover] received skills:updated event", updatedSkills)
       updateInstalledState(updatedSkills)
     })
 
     electronAPI.listInstalled().then((installed) => {
-      console.log("[discover] initial installed skills loaded", installed)
       updateInstalledState(installed)
     })
 
     return cleanup
+  }, [])
+
+  useEffect(() => {
+    Promise.all([
+      electronAPI.detectAgents(),
+      electronAPI.settingsGet("install.defaultAgents", [] as string[]),
+    ])
+      .then(([agents, defaults]) => {
+        setAvailableAgents(agents)
+        setDefaultAgents(defaults)
+      })
+      .catch(() => {
+        setAvailableAgents([])
+        setDefaultAgents([])
+      })
   }, [])
 
   // Initial catalog load
@@ -605,29 +664,40 @@ export function Discover() {
 
   async function fetchSkills(query: string, offset: number) {
     const isNewSearch = offset === 0
+    const q = query.trim().length >= 2 ? query.trim() : "skill"
+    const requestKey = `${q}:${offset}`
+    if (inFlightPageKeysRef.current.has(requestKey)) {
+      return
+    }
+    inFlightPageKeysRef.current.add(requestKey)
+
     if (isNewSearch) {
       setLoading(true)
-      setActiveQuery(query)
+      setActiveQuery(q)
+      latestQueryRef.current = q
     } else {
       setLoadingMore(true)
     }
     setError(null)
 
     try {
-      const q = query.trim().length >= 2 ? query.trim() : "skill"
       const data = await electronAPI.searchCatalog(q, LIMIT, offset)
+      if (latestQueryRef.current !== q) {
+        return
+      }
 
       if (isNewSearch) {
-        setSkills(data.skills)
+        setSkills(dedupeCatalogSkills(data.skills))
       } else {
-        setSkills((prev) => [...prev, ...data.skills])
+        setSkills((prev) => dedupeCatalogSkills([...prev, ...data.skills]))
       }
-      setHasMore(data.count >= LIMIT)
+      setHasMore(offset + data.skills.length < data.count)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       setError(`Search failed: ${msg}`)
       console.error("Fetch error:", err)
     } finally {
+      inFlightPageKeysRef.current.delete(requestKey)
       setLoading(false)
       setLoadingMore(false)
     }
@@ -643,9 +713,9 @@ export function Discover() {
   }, [searchQuery])
 
   const handleLoadMore = useCallback(() => {
-    if (loadingMore || !hasMore) return
+    if (!hasMore) return
     fetchSkills(activeQuery, skills.length)
-  }, [loadingMore, hasMore, activeQuery, skills.length])
+  }, [activeQuery, hasMore, skills.length])
 
   // Infinite scroll
   useEffect(() => {
@@ -653,7 +723,7 @@ export function Discover() {
     if (!el) return
 
     function onScroll() {
-      if (!el || loadingMore || !hasMore) return
+      if (!el || !hasMore) return
       const { scrollTop, scrollHeight, clientHeight } = el
       if (scrollHeight - scrollTop - clientHeight < 200) {
         handleLoadMore()
@@ -662,7 +732,7 @@ export function Discover() {
 
     el.addEventListener("scroll", onScroll)
     return () => el.removeEventListener("scroll", onScroll)
-  }, [handleLoadMore, loadingMore, hasMore])
+  }, [handleLoadMore, hasMore])
 
   async function handleInstall(source: string, agentNames: string[]) {
     console.log("[discover] starting install", { source, agentNames })
@@ -677,6 +747,14 @@ export function Discover() {
     console.log("[discover] installed skills after install", installed)
     updateInstalledState(installed)
   }
+
+  const getCachedContent = useCallback((key: string) => {
+    return contentCacheRef.current.get(key)
+  }, [])
+
+  const cacheContent = useCallback((key: string, content: string | null) => {
+    contentCacheRef.current.set(key, content)
+  }, [])
 
   return (
     <div className="flex flex-col h-full">
@@ -730,9 +808,9 @@ export function Discover() {
         </div>
 
         {/* Results count when searching */}
-        {searchQuery.trim() && !loading && (
+        {deferredSearchQuery.trim() && !loading && (
           <p className="mt-2 text-[11px] text-muted font-mono">
-            {skills.length} result{skills.length !== 1 ? "s" : ""} for "{searchQuery.trim()}"
+            {skills.length} result{skills.length !== 1 ? "s" : ""} for "{deferredSearchQuery.trim()}"
           </p>
         )}
       </div>
@@ -772,7 +850,7 @@ export function Discover() {
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
             <p className="text-muted text-sm">
-              No skills found{searchQuery.trim() ? ` for "${searchQuery.trim()}"` : ""}.
+              No skills found{deferredSearchQuery.trim() ? ` for "${deferredSearchQuery.trim()}"` : ""}.
             </p>
           </div>
         ) : (
@@ -805,9 +883,13 @@ export function Discover() {
       {selectedSkill && (
         <DetailPanel
           skill={selectedSkill}
+          availableAgents={availableAgents}
+          defaultAgents={defaultAgents}
           onClose={() => setSelectedSkill(null)}
           installedNames={installedNames}
           installedSources={installedSources}
+          getCachedContent={getCachedContent}
+          cacheContent={cacheContent}
           onInstall={handleInstall}
         />
       )}

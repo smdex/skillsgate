@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { ThemeToggle } from "@skillsgate/ui"
 import { electronAPI } from "../lib/electron-api"
 
@@ -151,11 +151,15 @@ export function Sidebar() {
   useEffect(() => {
     electronAPI.serversCount().then(setServerCount).catch(() => {})
     electronAPI.appGetVersion().then(setAppVersion).catch(() => {})
-  }, [location.pathname])
+  }, [])
 
   // Enrich nav items with badge data
-  const enrichedNavItems = navItems.map((item) =>
-    item.to === "/servers" ? { ...item, badge: serverCount } : item,
+  const enrichedNavItems = useMemo(
+    () =>
+      navItems.map((item) =>
+        item.to === "/servers" ? { ...item, badge: serverCount } : item,
+      ),
+    [serverCount],
   )
 
   // On Home view: show compact icon-only sidebar (the Home page has its own
@@ -238,7 +242,7 @@ export function Sidebar() {
           </span>
         </div>
         <span className="text-xs text-muted mt-1 block">
-          Desktop v{appVersion || "0.3.3"}
+          Desktop v{appVersion || "..."}
         </span>
       </div>
 

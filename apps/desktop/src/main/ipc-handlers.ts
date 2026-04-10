@@ -292,9 +292,21 @@ const PROJECT_PROBES = [
 // Agent detection cache
 // ---------------------------------------------------------------------------
 
-let cachedAgents: Array<{ name: string; displayName: string; shortCode: string }> | null = null
+type DetectedAgentInfo = {
+  name: string
+  displayName: string
+  shortCode: string
+}
+
+let cachedAgents: DetectedAgentInfo[] | null = null
 let agentCacheTime = 0
+let detectAgentsPromise: Promise<DetectedAgentInfo[]> | null = null
 const AGENT_CACHE_TTL_MS = 60_000 // Re-detect at most once per minute
+
+const supportingFilesCache = new Map<string, SupportingFile[]>()
+const rescanInFlight = new Map<string, Promise<Array<Omit<InternalSkill, "folderName">>>>()
+let cachedSkillsFingerprint: string | null = null
+let lastBroadcastFingerprint: string | null = null
 
 async function parseSkillMd(filePath: string): Promise<ParsedSkill | null> {
   try {
@@ -346,6 +358,12 @@ function getProjectNameForPath(resolvedPath: string): string | null {
 }
 
 async function listSupportingFiles(skillDir: string): Promise<SupportingFile[]> {
+  const resolvedSkillDir = await fs.realpath(skillDir).catch(() => path.resolve(skillDir))
+  const cached = supportingFilesCache.get(resolvedSkillDir)
+  if (cached) {
+    return cached
+  }
+
   const files: SupportingFile[] = []
 
   async function walk(currentDir: string, prefix = ""): Promise<void> {
@@ -370,12 +388,28 @@ async function listSupportingFiles(skillDir: string): Promise<SupportingFile[]> 
   }
 
   try {
-    await walk(skillDir)
+    await walk(resolvedSkillDir)
   } catch {
     return []
   }
 
-  return files.sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+  const sorted = files.sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+  supportingFilesCache.set(resolvedSkillDir, sorted)
+  return sorted
+}
+
+function clearSupportingFilesCache(skillDir?: string): void {
+  if (!skillDir) {
+    supportingFilesCache.clear()
+    return
+  }
+
+  const resolved = path.resolve(skillDir)
+  for (const key of supportingFilesCache.keys()) {
+    if (key === resolved) {
+      supportingFilesCache.delete(key)
+    }
+  }
 }
 
 function isSkillPathAllowed(resolvedPath: string): boolean {
@@ -387,6 +421,7 @@ function isSkillPathAllowed(resolvedPath: string): boolean {
 }
 
 function getExpandedTargetAgents(requestedAgentNames: string[]): AgentEntry[] {
+  ensureStores()
   const configuredDefaultAgents = settingsStore?.get<string[]>(DEFAULT_AGENTS_KEY, []) ?? []
   const configuredMirrorAgents = settingsStore?.get<string[]>(MIRROR_AGENTS_KEY, []) ?? []
 
@@ -410,6 +445,7 @@ function getExpandedTargetAgents(requestedAgentNames: string[]): AgentEntry[] {
 async function collectSkillsFromRoot(
   rootPath: string,
   scopeHint: "custom" | "project",
+  lock: SkillLockFile,
 ): Promise<
   Array<{
     name: string
@@ -448,8 +484,6 @@ async function collectSkillsFromRoot(
   }> = []
 
   const resolvedRoot = path.resolve(rootPath.replace(/^~(?=$|\/|\\)/, home))
-  const lock = await readSkillLock()
-
   async function maybeCollectSkillDir(skillDir: string, scope: "project" | "custom") {
     const skillMdPath = path.join(skillDir, "SKILL.md")
     if (!(await fileExists(skillMdPath))) return
@@ -526,42 +560,59 @@ function sanitizeName(name: string): string {
 }
 
 /** Detect all installed agents on this machine */
-async function detectAgents(): Promise<
-  Array<{ name: string; displayName: string; shortCode: string }>
-> {
+async function detectAgents(): Promise<DetectedAgentInfo[]> {
   const now = Date.now()
   if (cachedAgents && now - agentCacheTime < AGENT_CACHE_TTL_MS) {
     return cachedAgents
   }
 
-  const detected: Array<{
-    name: string
-    displayName: string
-    shortCode: string
-  }> = []
-  for (const agent of Object.values(agentRegistry)) {
-    try {
-      if (await agent.detectInstalled()) {
-        detected.push({
-          name: agent.name,
-          displayName: agent.displayName,
-          shortCode: agent.shortCode,
-        })
-      }
-    } catch {
-      // Skip agents that fail detection
-    }
+  if (detectAgentsPromise) {
+    return detectAgentsPromise
   }
 
-  cachedAgents = detected
-  agentCacheTime = now
+  detectAgentsPromise = (async () => {
+    const detected: DetectedAgentInfo[] = []
+    for (const agent of Object.values(agentRegistry)) {
+      try {
+        if (await agent.detectInstalled()) {
+          detected.push({
+            name: agent.name,
+            displayName: agent.displayName,
+            shortCode: agent.shortCode,
+          })
+        }
+      } catch {
+        // Skip agents that fail detection
+      }
+    }
+
+    cachedAgents = detected
+    agentCacheTime = Date.now()
+    return detected
+  })()
+
+  try {
+    return await detectAgentsPromise
+  } finally {
+    detectAgentsPromise = null
+  }
+}
+
+async function getDetectedAgentEntries(): Promise<AgentEntry[]> {
+  const detected = await detectAgents()
   return detected
+    .map((agent) => agentRegistry[agent.name])
+    .filter((value): value is AgentEntry => Boolean(value))
 }
 
 /** Scan all detected agents for installed skills, merging with lock file data.
  *  Returns the full internal shape including folderName (needed for caching). */
 async function listInstalledSkillsInternal(
-  opts: { skipCustomPaths?: boolean } = {},
+  opts: {
+    skipCustomPaths?: boolean
+    agents?: AgentEntry[]
+    lock?: SkillLockFile
+  } = {},
 ): Promise<
   Array<{
     name: string
@@ -581,7 +632,7 @@ async function listInstalledSkillsInternal(
     folderName: string
   }>
 > {
-  const lock = await readSkillLock()
+  const lock = opts.lock ?? await readSkillLock()
   const skillMap = new Map<
     string,
     {
@@ -603,7 +654,9 @@ async function listInstalledSkillsInternal(
     }
   >()
 
-  for (const agent of Object.values(agentRegistry)) {
+  const agentsToScan = opts.agents ?? await getDetectedAgentEntries()
+
+  for (const agent of agentsToScan) {
     const skillsDir = agent.globalSkillsDir
     try {
       const entries = await fs.readdir(skillsDir, { withFileTypes: true })
@@ -664,9 +717,10 @@ async function listInstalledSkillsInternal(
   }
 
   if (!opts.skipCustomPaths) {
+    ensureStores()
     const customScanPaths = settingsStore?.get<string[]>(CUSTOM_SCAN_PATHS_KEY, []) ?? []
     for (const customPath of customScanPaths) {
-      const collected = await collectSkillsFromRoot(customPath, "custom")
+      const collected = await collectSkillsFromRoot(customPath, "custom", lock)
       for (const item of collected) {
         if (!skillMap.has(item.canonicalPath)) {
           skillMap.set(item.canonicalPath, item)
@@ -694,6 +748,88 @@ async function listInstalledSkills() {
   return toRendererSkills(raw)
 }
 
+function createSkillsFingerprint(skills: InternalSkill[]): string {
+  return JSON.stringify(
+    [...skills]
+      .sort((a, b) => a.canonicalPath.localeCompare(b.canonicalPath))
+      .map((skill) => ({
+        canonicalPath: skill.canonicalPath,
+        name: skill.name,
+        description: skill.description,
+        agents: [...skill.agents].sort(),
+        agentShortCodes: [...skill.agentShortCodes].sort(),
+        scope: skill.scope,
+        projectName: skill.projectName,
+        hasSupportingFiles: skill.hasSupportingFiles,
+        supportingFiles: [...skill.supportingFiles].sort((a, b) =>
+          a.relativePath.localeCompare(b.relativePath),
+        ),
+        source: skill.source,
+        sourceType: skill.sourceType,
+        installedAt: skill.installedAt,
+        updatedAt: skill.updatedAt,
+        folderName: skill.folderName,
+      })),
+  )
+}
+
+function getCachedSkillsFingerprint(): string {
+  if (cachedSkillsFingerprint === null) {
+    cachedSkillsFingerprint = createSkillsFingerprint(
+      loadCachedSkills() as InternalSkill[],
+    )
+  }
+  return cachedSkillsFingerprint
+}
+
+function persistCachedSkills(raw: InternalSkill[]): string {
+  const fingerprint = createSkillsFingerprint(raw)
+  if (fingerprint !== getCachedSkillsFingerprint()) {
+    saveCachedSkills(raw)
+    cachedSkillsFingerprint = fingerprint
+  }
+  return fingerprint
+}
+
+function maybeBroadcastSkills(
+  raw: InternalSkill[],
+  fingerprint: string,
+  broadcast: boolean,
+): void {
+  if (!broadcast || fingerprint === lastBroadcastFingerprint) {
+    return
+  }
+
+  if (_mainWindow && !_mainWindow.isDestroyed()) {
+    _mainWindow.webContents.send("skills:updated", toRendererSkills(raw))
+  }
+  lastBroadcastFingerprint = fingerprint
+}
+
+async function runRescan(
+  key: string,
+  run: () => Promise<InternalSkill[]>,
+  broadcast: boolean,
+): Promise<Array<Omit<InternalSkill, "folderName">>> {
+  const inFlight = rescanInFlight.get(key)
+  if (inFlight) {
+    return inFlight
+  }
+
+  const task = (async () => {
+    const raw = await run()
+    clearSupportingFilesCache()
+    const fingerprint = persistCachedSkills(raw)
+    maybeBroadcastSkills(raw, fingerprint, broadcast)
+    return toRendererSkills(raw)
+  })().finally(() => {
+    rescanInFlight.delete(key)
+  })
+
+  rescanInFlight.set(key, task)
+  return task
+}
+
 // ---------------------------------------------------------------------------
 // Skills cache: rescan, save, and push to renderer
 // ---------------------------------------------------------------------------
@@ -712,17 +848,25 @@ export function setMainWindow(win: BrowserWindow): void {
  * Pass { skipCustomPaths: true } from the file watcher to avoid
  * walking potentially large custom scan directories on every change.
  */
-async function rescanAndCache(opts: { skipCustomPaths?: boolean } = {}) {
-  const raw = await listInstalledSkillsInternal({ skipCustomPaths: opts.skipCustomPaths })
-  saveCachedSkills(raw)
-
-  const skills = toRendererSkills(raw)
-
-  if (_mainWindow && !_mainWindow.isDestroyed()) {
-    _mainWindow.webContents.send("skills:updated", skills)
-  }
-
-  return skills
+async function rescanAndCache(
+  opts: { skipCustomPaths?: boolean; broadcast?: boolean } = {},
+) {
+  const key = opts.skipCustomPaths ? "quick" : "full"
+  return runRescan(
+    key,
+    async () => {
+      const [agents, lock] = await Promise.all([
+        getDetectedAgentEntries(),
+        readSkillLock(),
+      ])
+      return listInstalledSkillsInternal({
+        skipCustomPaths: opts.skipCustomPaths,
+        agents,
+        lock,
+      })
+    },
+    opts.broadcast ?? true,
+  )
 }
 
 /**
@@ -746,13 +890,16 @@ async function rescanSingleSkill(changedPath: string): Promise<void> {
   const existingIdx = cached.findIndex((s) => s.folderName === skillFolderName)
 
   // Re-scan just this skill across all agents
-  const lock = await readSkillLock()
+  const [lock, agentsToScan] = await Promise.all([
+    readSkillLock(),
+    getDetectedAgentEntries(),
+  ])
   const agents: string[] = []
   const agentShortCodes: string[] = []
   let resolvedDir: string | null = null
   let parsed: ParsedSkill | null = null
 
-  for (const agent of Object.values(agentRegistry)) {
+  for (const agent of agentsToScan) {
     const skillDir = path.join(agent.globalSkillsDir, skillFolderName)
     try {
       const realPath = await fs.realpath(skillDir)
@@ -804,12 +951,9 @@ async function rescanSingleSkill(changedPath: string): Promise<void> {
     return
   }
 
-  saveCachedSkills(cached)
-
-  const skills = toRendererSkills(cached)
-  if (_mainWindow && !_mainWindow.isDestroyed()) {
-    _mainWindow.webContents.send("skills:updated", skills)
-  }
+  clearSupportingFilesCache(resolvedDir ?? undefined)
+  const fingerprint = persistCachedSkills(cached as InternalSkill[])
+  maybeBroadcastSkills(cached as InternalSkill[], fingerprint, true)
 }
 
 // ---------------------------------------------------------------------------
@@ -1024,10 +1168,21 @@ async function installSkillToAgent(
 // IPC Handlers
 // ---------------------------------------------------------------------------
 
-// Initialize SQLite stores (lazy, created on first registerIpcHandlers call)
-let settingsStore: SettingsStore
-let serverStore: RemoteServerStore
-let skillStore: RemoteSkillStore
+// Initialize SQLite stores lazily so cold start is not blocked on DB open.
+let settingsStore!: SettingsStore
+let serverStore!: RemoteServerStore
+let skillStore!: RemoteSkillStore
+
+function ensureStores(): void {
+  if (settingsStore && serverStore && skillStore) {
+    return
+  }
+
+  const db = openDb()
+  settingsStore ??= new SettingsStore(db)
+  serverStore ??= new RemoteServerStore(db)
+  skillStore ??= new RemoteSkillStore(db)
+}
 
 const COMMON_BIN_DIRS = [
   "/opt/homebrew/bin",
@@ -1104,11 +1259,6 @@ async function resolveNpxPath(): Promise<string> {
 }
 
 export function registerIpcHandlers(): void {
-  // Open shared SQLite database
-  const db = openDb()
-  settingsStore = new SettingsStore(db)
-  serverStore = new RemoteServerStore(db)
-  skillStore = new RemoteSkillStore(db)
   console.log("[ipc] registerIpcHandlers initialized")
   // Detect which agents are installed on this machine
   ipcMain.handle("agents:detect", async () => {
@@ -1121,14 +1271,17 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("skills:list-installed", async () => {
     const cached = loadCachedSkills()
     if (cached.length > 0) {
+      const cachedFingerprint = createSkillsFingerprint(cached as InternalSkill[])
+      cachedSkillsFingerprint = cachedFingerprint
+      lastBroadcastFingerprint = cachedFingerprint
       // Return stale-while-revalidate: send cached data now, rescan later
-      rescanAndCache().catch((err) => {
+      rescanAndCache({ skipCustomPaths: true }).catch((err) => {
         console.error("Background rescan failed:", err)
       })
       return toRendererSkills(cached)
     }
     // Cache is empty (first launch or cleared) -- do a full scan synchronously
-    return rescanAndCache()
+    return rescanAndCache({ broadcast: false })
   })
 
   // Force a full filesystem rescan, update the cache, and push to renderer
@@ -1641,6 +1794,7 @@ Add your skill instructions here.
   // -------------------------------------------------------------------------
 
   ipcMain.handle("servers:list", () => {
+    ensureStores()
     const servers = serverStore.list()
     // Enrich with skill count
     return servers.map((s) => ({
@@ -1650,34 +1804,41 @@ Add your skill instructions here.
   })
 
   ipcMain.handle("servers:create", (_event, data) => {
+    ensureStores()
     return serverStore.create(data)
   })
 
   ipcMain.handle("servers:update", (_event, id: string, fields) => {
+    ensureStores()
     return serverStore.update(id, fields)
   })
 
   ipcMain.handle("servers:delete", (_event, id: string) => {
+    ensureStores()
     serverStore.delete(id)
   })
 
   ipcMain.handle("servers:test", async (_event, id: string) => {
+    ensureStores()
     const server = serverStore.get(id)
     if (!server) return { ok: false, error: "Server not found" }
     return testConnection(server)
   })
 
   ipcMain.handle("servers:sync", async (_event, id: string) => {
+    ensureStores()
     const server = serverStore.get(id)
     if (!server) return { added: 0, updated: 0, removed: 0, unchanged: 0, error: "Server not found" }
     return syncRemoteServer({ remoteServers: serverStore, remoteSkills: skillStore }, server)
   })
 
   ipcMain.handle("servers:skills", (_event, serverId: string) => {
+    ensureStores()
     return skillStore.listByServer(serverId)
   })
 
   ipcMain.handle("servers:read-skill", async (_event, serverId: string, remotePath: string) => {
+    ensureStores()
     const server = serverStore.get(serverId)
     if (!server) {
       throw new Error("Server not found")
@@ -1688,6 +1849,7 @@ Add your skill instructions here.
   ipcMain.handle(
     "servers:write-skill",
     async (_event, serverId: string, remotePath: string, content: string) => {
+      ensureStores()
       const server = serverStore.get(serverId)
       if (!server) {
         throw new Error("Server not found")
@@ -1703,6 +1865,7 @@ Add your skill instructions here.
   )
 
   ipcMain.handle("servers:count", () => {
+    ensureStores()
     return serverStore.count()
   })
 
@@ -1711,14 +1874,17 @@ Add your skill instructions here.
   // -------------------------------------------------------------------------
 
   ipcMain.handle("settings:get", (_event, key: string, defaultValue: unknown) => {
+    ensureStores()
     return settingsStore.get(key, defaultValue)
   })
 
   ipcMain.handle("settings:set", (_event, key: string, value: unknown) => {
+    ensureStores()
     settingsStore.set(key, value)
   })
 
   ipcMain.handle("settings:all", () => {
+    ensureStores()
     return settingsStore.getAll()
   })
 

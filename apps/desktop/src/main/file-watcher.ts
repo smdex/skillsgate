@@ -17,8 +17,8 @@ const CANONICAL_DIR = path.join(os.homedir(), ".agents", "skills")
 export class SkillsFileWatcher {
   private watchers: fs.FSWatcher[] = []
   private debounceTimer: ReturnType<typeof setTimeout> | null = null
-  // undefined = no pending event, string = single changed path, null = ambiguous (full rescan)
-  private pendingPath: string | null | undefined = undefined
+  private pendingSkillFolders = new Set<string>()
+  private forceFullRescan = false
   private mainWindow: BrowserWindow
 
   constructor(mainWindow: BrowserWindow) {
@@ -90,14 +90,11 @@ export class SkillsFileWatcher {
   }
 
   private scheduleRescan(changedPath: string | null): void {
-    // Track which path changed. If multiple different files change within
-    // the debounce window, fall back to a full rescan (pendingPath = null).
-    if (changedPath === null) {
-      this.pendingPath = null
-    } else if (this.pendingPath === undefined) {
-      this.pendingPath = changedPath
-    } else if (this.pendingPath !== null && this.pendingPath !== changedPath) {
-      this.pendingPath = null
+    const skillFolder = this.getChangedSkillFolder(changedPath)
+    if (skillFolder) {
+      this.pendingSkillFolders.add(skillFolder)
+    } else {
+      this.forceFullRescan = true
     }
 
     if (this.debounceTimer) {
@@ -105,12 +102,16 @@ export class SkillsFileWatcher {
     }
 
     this.debounceTimer = setTimeout(async () => {
-      const pathToRescan = this.pendingPath
+      const pendingFolders = [...this.pendingSkillFolders]
+      const shouldFullRescan =
+        this.forceFullRescan || pendingFolders.length !== 1
+
       this.debounceTimer = null
-      this.pendingPath = undefined
+      this.pendingSkillFolders.clear()
+      this.forceFullRescan = false
       try {
-        if (typeof pathToRescan === "string") {
-          await rescanSingleSkill(pathToRescan)
+        if (!shouldFullRescan) {
+          await rescanSingleSkill(pendingFolders[0])
         } else {
           await rescanAndCache({ skipCustomPaths: true })
         }
@@ -120,12 +121,27 @@ export class SkillsFileWatcher {
     }, DEBOUNCE_MS)
   }
 
+  private getChangedSkillFolder(changedPath: string | null): string | null {
+    if (!changedPath) {
+      return null
+    }
+
+    const segments = changedPath.split(/[\\/]+/).filter(Boolean)
+    const skillFolder = segments[0]
+    if (!skillFolder || skillFolder.startsWith(".")) {
+      return null
+    }
+
+    return skillFolder
+  }
+
   stop(): void {
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer)
       this.debounceTimer = null
     }
-    this.pendingPath = undefined
+    this.pendingSkillFolders.clear()
+    this.forceFullRescan = false
 
     for (const watcher of this.watchers) {
       try {
