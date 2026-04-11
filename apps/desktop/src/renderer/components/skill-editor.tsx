@@ -16,14 +16,15 @@ import { searchKeymap } from "@codemirror/search"
 const LARGE_DOCUMENT_CHAR_THRESHOLD = 30_000
 const LARGE_DOCUMENT_LINE_THRESHOLD = 800
 
-const theme = EditorView.theme({
+function createTheme(fullBleed: boolean) {
+  return EditorView.theme({
   "&": {
     fontSize: "13px",
     fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
     backgroundColor: "#0a0a0a",
     color: "#e5e5e5",
-    borderRadius: "8px",
-    border: "1px solid var(--color-border, #262626)",
+    borderRadius: fullBleed ? "0" : "8px",
+    border: fullBleed ? "none" : "1px solid var(--color-border, #262626)",
     overflow: "hidden",
     height: "100%",
   },
@@ -61,11 +62,13 @@ const theme = EditorView.theme({
     outline: "none",
   },
 }, { dark: true })
+}
 
 interface SkillEditorProps {
   content: string
   onChange?: (content: string) => void
   onSave: (content: string) => void
+  fullBleed?: boolean
 }
 
 export interface SkillEditorHandle {
@@ -74,7 +77,7 @@ export interface SkillEditorHandle {
 }
 
 export const SkillEditor = forwardRef<SkillEditorHandle, SkillEditorProps>(function SkillEditor(
-  { content, onChange, onSave }: SkillEditorProps,
+  { content, onChange, onSave, fullBleed = false }: SkillEditorProps,
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -90,6 +93,7 @@ export const SkillEditor = forwardRef<SkillEditorHandle, SkillEditorProps>(funct
     }
     return content.split("\n").length >= LARGE_DOCUMENT_LINE_THRESHOLD
   }, [content])
+  const theme = useMemo(() => createTheme(fullBleed), [fullBleed])
 
   useImperativeHandle(ref, () => ({
     getValue: () => viewRef.current?.state.doc.toString() ?? content,
@@ -149,7 +153,7 @@ export const SkillEditor = forwardRef<SkillEditorHandle, SkillEditorProps>(funct
       viewRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content, isLargeDocument])
+  }, [content, isLargeDocument, theme])
 
   // Sync external content changes
   useEffect(() => {

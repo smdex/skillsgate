@@ -976,6 +976,14 @@ function RightPanel({
 
   const isLocalSkill = !!(skill?.path)
 
+  useEffect(() => {
+    if (!editMode) return
+    const timer = window.setTimeout(() => {
+      editorRef.current?.focus()
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [editMode])
+
   const handleEditToggle = () => {
     if (!editMode) {
       setSaveStatus("idle")
@@ -1066,10 +1074,57 @@ function RightPanel({
     )
   }
 
+  if (editMode) {
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden bg-background">
+        <div className="flex items-center justify-between gap-4 border-b border-border px-8 py-5">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="truncate text-xl font-bold text-foreground">{skill.name}</h1>
+              <SourceBadge sourceType={skill.sourceType} />
+            </div>
+            <p className="mt-1 text-[12px] text-muted">
+              Editing raw `SKILL.md`
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {saveStatus === "saved" && (
+              <span className="text-[12px] text-green-500">Saved</span>
+            )}
+            {saveStatus === "error" && (
+              <span className="text-[12px] text-red-500">Save failed</span>
+            )}
+            <button
+              onClick={handleCancel}
+              className="rounded-lg border border-border px-4 py-2 text-[12px] text-muted transition-colors hover:text-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => handleSave()}
+              disabled={saveStatus === "saving"}
+              className="rounded-lg bg-foreground px-4 py-2 text-[12px] text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {saveStatus === "saving" ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 min-h-0">
+          <SkillEditor
+            ref={editorRef}
+            content={content ?? ""}
+            onSave={handleSave}
+            fullBleed
+          />
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-background">
-      <div className={`flex-1 ${editMode ? "flex flex-col overflow-hidden" : "overflow-y-auto"}`}>
-        <div className={`px-8 py-6 ${editMode ? "flex flex-col flex-1 min-h-0" : ""}`}>
+      <div className="flex-1 flex flex-col overflow-hidden bg-background">
+        <div className="flex-1 overflow-y-auto">
+          <div className="px-8 py-6">
           {/* Header */}
           <div className="mb-6">
             <div className="flex items-start justify-between gap-3 mb-2">
@@ -1191,38 +1246,7 @@ function RightPanel({
           <hr className="border-border mb-6" />
 
           {/* Content: View or Edit mode */}
-          {editMode ? (
-            <div className="flex flex-col flex-1 min-h-0">
-              <div className="flex-1 min-h-0">
-                <SkillEditor
-                  ref={editorRef}
-                  content={content ?? ""}
-                  onSave={handleSave}
-                />
-              </div>
-              <div className="flex items-center gap-2 justify-end py-3 flex-shrink-0">
-                {saveStatus === "saved" && (
-                  <span className="text-[12px] text-green-500 mr-2">Saved</span>
-                )}
-                {saveStatus === "error" && (
-                  <span className="text-[12px] text-red-500 mr-2">Save failed</span>
-                )}
-                <button
-                  onClick={handleCancel}
-                  className="text-muted text-[12px] px-4 py-1.5 hover:text-foreground transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saveStatus === "saving"}
-                  className="bg-foreground text-background text-[12px] px-4 py-1.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
-                >
-                  {saveStatus === "saving" ? "Saving..." : "Save"}
-                </button>
-              </div>
-            </div>
-          ) : contentLoading ? (
+          {contentLoading ? (
             <p className="text-sm text-muted animate-fade-in">Loading content...</p>
           ) : content ? (
             <MemoizedMarkdown content={content} />
