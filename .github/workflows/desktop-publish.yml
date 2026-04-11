@@ -51,7 +51,31 @@ jobs:
         shell: bash
 
       - name: Build and package desktop app
-        run: npm run package:${{ matrix.platform }} -w @skillsgate/desktop -- ${{ matrix.arch && format('--{0}', matrix.arch) || '' }}
+        run: |
+          set -euo pipefail
+          package_cmd="npm run package:${{ matrix.platform }} -w @skillsgate/desktop -- ${{ matrix.arch && format('--{0}', matrix.arch) || '' }}"
+
+          if [[ "${{ matrix.platform }}" != "mac" ]]; then
+            eval "$package_cmd"
+            exit 0
+          fi
+
+          max_attempts=3
+          for attempt in $(seq 1 "$max_attempts"); do
+            echo "macOS packaging attempt $attempt/$max_attempts"
+            if eval "$package_cmd"; then
+              exit 0
+            fi
+
+            if [[ "$attempt" -eq "$max_attempts" ]]; then
+              echo "macOS packaging failed after $max_attempts attempts"
+              exit 1
+            fi
+
+            retry_delay=$((attempt * 30))
+            echo "Retrying macOS packaging after ${retry_delay}s to work around transient notarization/network failures"
+            sleep "$retry_delay"
+          done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # macOS code signing
