@@ -499,7 +499,6 @@ export default function Home() {
 							</span>
 							<div className="space-y-2.5">
 								<a href="https://github.com/skillsgate/skillsgate" target="_blank" rel="noopener noreferrer" className="block text-[13px] text-muted hover:text-foreground transition-colors">GitHub</a>
-								<a href="/blog" className="block text-[13px] text-muted hover:text-foreground transition-colors">Blog</a>
 							</div>
 						</div>
 					</div>

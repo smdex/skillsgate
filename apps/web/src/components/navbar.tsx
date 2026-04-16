@@ -44,12 +44,6 @@ export function Navbar() {
 					>
 						Features
 					</a>
-					<a
-						href="/blog"
-						className="text-[13px] tracking-wide uppercase text-muted hover:text-foreground transition-colors"
-					>
-						Blog
-					</a>
 					<NavbarStarButton />
 				</div>
 

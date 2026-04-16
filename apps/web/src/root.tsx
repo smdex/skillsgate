@@ -6,7 +6,6 @@ import {
 	Scripts,
 	ScrollRestoration,
 } from "react-router";
-import { UIProviders } from "~/lib/ui-providers";
 import "./globals.css";
 
 export const links: LinksFunction = () => [
@@ -62,9 +61,7 @@ export default function Root() {
 				/>
 			</head>
 			<body className="font-sans antialiased bg-background text-foreground">
-				<UIProviders>
-					<Outlet />
-				</UIProviders>
+				<Outlet />
 				<ScrollRestoration />
 				<Scripts />
 			</body>
