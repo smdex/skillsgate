@@ -270,38 +270,63 @@ function parseDelimitedOutput(output: string): ScannedRemoteSkill[] {
   return skills
 }
 
+/**
+ * Detect "directory does not exist" errors from `find` stderr.
+ * BSD/macOS find: "find: <path>: No such file or directory"
+ * GNU find:      "find: '<path>': No such file or directory"
+ */
+function isMissingDirError(stderr: string): boolean {
+  return /no such file or directory/i.test(stderr)
+}
+
 export async function scanRemoteSkills(
   server: RemoteServer,
 ): Promise<ScannedRemoteSkill[]> {
   const basePath = shellQuotePath(server.skillsBasePath)
 
-  // Round trip 1: Find all SKILL.md files
+  // Round trip 1: Find all SKILL.md files. Capture stderr (do NOT redirect to
+  // /dev/null) so we can distinguish "directory doesn't exist" from real errors.
   const findResult = await sshExec(
     server,
-    `find ${basePath} -name 'SKILL.md' -type f 2>/dev/null`,
+    `find ${basePath} -name 'SKILL.md' -type f`,
   )
-  if (findResult.exitCode !== 0 && findResult.stdout.trim() === "") {
-    throw new Error(`Find failed: ${findResult.stderr.trim()}`)
-  }
 
-  const paths = findResult.stdout.trim().split("\n").filter(Boolean)
+  const paths = findResult.stdout
+    .split("\n")
+    .map((p) => p.trim())
+    .filter(Boolean)
+
+  if (findResult.exitCode !== 0 && paths.length === 0) {
+    const stderr = findResult.stderr.trim()
+    // Missing skills directory on a fresh remote is a normal state, not a sync
+    // failure -- treat it as zero skills so the user can populate it later.
+    if (isMissingDirError(stderr)) return []
+    throw new Error(
+      stderr || `find exited with code ${findResult.exitCode} on ${server.skillsBasePath}`,
+    )
+  }
   if (paths.length === 0) return []
 
-  // Round trip 2: Batch read all files in a single SSH call
-  // Validate paths: only allow typical file paths (no shell metacharacters)
-  const safePaths = paths.filter((p) => /^[a-zA-Z0-9_.\/\-~]+$/.test(p))
+  // Round trip 2: Batch read all files in a single SSH call.
+  // Single-quote escaping below handles arbitrary characters in the path safely;
+  // only reject paths with chars that would break our delimiter parser.
+  const safePaths = paths.filter((p) => !/[\x00\n\r]/.test(p))
   if (safePaths.length === 0) return []
 
   const catCommands = safePaths
     .map((p) => {
       const escaped = `'${p.replace(/'/g, "'\\''")}'`
-      return `printf '%s\\n' '${DELIMITER_PREFIX}${p.replace(/'/g, "'\\''") }${DELIMITER_SUFFIX}' && cat ${escaped}`
+      const delimPath = p.replace(/'/g, "'\\''")
+      return `printf '%s\\n' '${DELIMITER_PREFIX}${delimPath}${DELIMITER_SUFFIX}' && cat ${escaped}`
     })
     .join(" && ")
 
   const catResult = await sshExec(server, catCommands)
   if (catResult.exitCode !== 0 && catResult.stdout.trim() === "") {
-    throw new Error(`Batch read failed: ${catResult.stderr.trim()}`)
+    throw new Error(
+      catResult.stderr.trim() ||
+        `cat exited with code ${catResult.exitCode}`,
+    )
   }
 
   return parseDelimitedOutput(catResult.stdout)

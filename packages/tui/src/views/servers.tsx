@@ -169,18 +169,21 @@ export function ServersView({ onServerCountChange }: ServersViewProps) {
     setSyncing(false)
     refreshList()
 
-    if (result.total > 0 || result.removed > 0) {
+    if (result.error) {
+      dispatch({
+        type: "SHOW_NOTIFICATION",
+        notification: {
+          type: "error",
+          message: `Sync failed for ${server.label}: ${result.error}`,
+        },
+      })
+    } else if (result.total > 0 || result.removed > 0) {
       dispatch({
         type: "SHOW_NOTIFICATION",
         notification: {
           type: "success",
           message: `Synced ${server.label}: ${result.added} new, ${result.updated} updated, ${result.removed} removed`,
         },
-      })
-    } else if (result.log.some((l) => l.includes("failed"))) {
-      dispatch({
-        type: "SHOW_NOTIFICATION",
-        notification: { type: "error", message: `Sync failed for ${server.label}` },
       })
     } else {
       dispatch({

@@ -198,34 +198,59 @@ function sha256(content: string): string {
   return crypto.createHash("sha256").update(content).digest("hex")
 }
 
+/**
+ * Detect "directory does not exist" errors from `find` stderr.
+ */
+function isMissingDirError(stderr: string): boolean {
+  return /no such file or directory/i.test(stderr)
+}
+
 export async function scanRemoteSkills(
   server: RemoteServer
 ): Promise<ScannedRemoteSkill[]> {
   const basePath = shellQuotePath(server.skillsBasePath)
 
-  // Round trip 1: Find all SKILL.md files
+  // Round trip 1: Find all SKILL.md files. Capture stderr (do NOT redirect to
+  // /dev/null) so we can distinguish "directory doesn't exist" from real errors.
   const findResult = await sshExec(
     server,
-    `find ${basePath} -name 'SKILL.md' -type f 2>/dev/null`
+    `find ${basePath} -name 'SKILL.md' -type f`
   )
-  if (findResult.exitCode !== 0 && findResult.stdout.trim() === "") {
-    throw new Error(`Find failed: ${findResult.stderr.trim()}`)
-  }
 
-  const paths = findResult.stdout.trim().split("\n").filter(Boolean)
+  const paths = findResult.stdout
+    .split("\n")
+    .map((p) => p.trim())
+    .filter(Boolean)
+
+  if (findResult.exitCode !== 0 && paths.length === 0) {
+    const stderr = findResult.stderr.trim()
+    // Missing skills directory on a fresh remote is a normal state.
+    if (isMissingDirError(stderr)) return []
+    throw new Error(
+      stderr || `find exited with code ${findResult.exitCode} on ${server.skillsBasePath}`
+    )
+  }
   if (paths.length === 0) return []
 
-  // Round trip 2: Batch read all files in a single SSH call
-  const catCommands = paths
+  // Round trip 2: Batch read all files in a single SSH call.
+  // Single-quote escaping handles arbitrary characters; only reject paths with
+  // chars that would break our delimiter parser.
+  const safePaths = paths.filter((p) => !/[\x00\n\r]/.test(p))
+  if (safePaths.length === 0) return []
+
+  const catCommands = safePaths
     .map((p) => {
       const escaped = `'${p.replace(/'/g, "'\\''")}'`
-      return `echo '${DELIMITER_PREFIX}${p}${DELIMITER_SUFFIX}' && cat ${escaped}`
+      const delimPath = p.replace(/'/g, "'\\''")
+      return `printf '%s\\n' '${DELIMITER_PREFIX}${delimPath}${DELIMITER_SUFFIX}' && cat ${escaped}`
     })
     .join(" && ")
 
   const catResult = await sshExec(server, catCommands)
-  if (catResult.exitCode !== 0) {
-    throw new Error(`Batch read failed: ${catResult.stderr.trim()}`)
+  if (catResult.exitCode !== 0 && catResult.stdout.trim() === "") {
+    throw new Error(
+      catResult.stderr.trim() || `cat exited with code ${catResult.exitCode}`
+    )
   }
 
   return parseDelimitedOutput(catResult.stdout)
@@ -283,6 +308,7 @@ export interface SyncResult {
   unchanged: number
   total: number
   log: string[]
+  error?: string
 }
 
 export async function syncRemoteServer(
@@ -349,7 +375,7 @@ export async function syncRemoteServer(
     }
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err)
-    log.push(`SSH connection failed: ${errorMsg}`)
+    log.push(`Sync failed: ${errorMsg}`)
     serverStore.updateSyncStatus(server.id, errorMsg)
     return {
       added: 0,
@@ -358,6 +384,7 @@ export async function syncRemoteServer(
       unchanged: 0,
       total: 0,
       log,
+      error: errorMsg,
     }
   }
 }

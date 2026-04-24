@@ -261,6 +261,12 @@ export function Servers() {
   const [testResults, setTestResults] = useState<
     Record<string, { ok: boolean; error?: string }>
   >({})
+  const [syncResults, setSyncResults] = useState<
+    Record<
+      string,
+      { ok: boolean; added?: number; updated?: number; removed?: number; unchanged?: number; error?: string }
+    >
+  >({})
 
   const loadServers = useCallback(async () => {
     try {
@@ -329,9 +335,40 @@ export function Servers() {
 
   async function handleSync(id: string) {
     setSyncingIds((prev) => new Set([...prev, id]))
+    setSyncResults((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
     try {
-      await electronAPI.serversSync(id)
+      const result = (await electronAPI.serversSync(id)) as {
+        added: number
+        updated: number
+        removed: number
+        unchanged: number
+        error?: string
+      }
+      setSyncResults((prev) => ({
+        ...prev,
+        [id]: result.error
+          ? { ok: false, error: result.error }
+          : {
+              ok: true,
+              added: result.added,
+              updated: result.updated,
+              removed: result.removed,
+              unchanged: result.unchanged,
+            },
+      }))
       await loadServers()
+    } catch (err) {
+      setSyncResults((prev) => ({
+        ...prev,
+        [id]: {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      }))
     } finally {
       setSyncingIds((prev) => {
         const next = new Set(prev)
@@ -420,12 +457,14 @@ export function Servers() {
             const isSyncing = syncingIds.has(server.id)
             const isTesting = testingIds.has(server.id)
             const testResult = testResults[server.id]
+            const syncResult = syncResults[server.id]
 
             return (
               <div
                 key={server.id}
-                className="flex items-center gap-4 p-4 rounded-lg border border-border bg-surface hover:bg-surface-hover transition-colors group"
+                className="flex flex-col gap-2 p-4 rounded-lg border border-border bg-surface hover:bg-surface-hover transition-colors group"
               >
+                <div className="flex items-center gap-4">
                 {/* Status dot */}
                 <StatusDot server={server} syncing={isSyncing} />
 
@@ -448,14 +487,6 @@ export function Servers() {
                     <span className="text-[10px] text-muted">
                       synced {relativeTime(server.lastSyncAt)}
                     </span>
-                    {server.lastSyncError && (
-                      <span
-                        className="text-[10px] text-red-400 truncate max-w-[200px]"
-                        title={server.lastSyncError}
-                      >
-                        {server.lastSyncError}
-                      </span>
-                    )}
                     {testResult && (
                       <span
                         className={`text-[10px] ${testResult.ok ? "text-emerald-400" : "text-red-400"}`}
@@ -508,6 +539,34 @@ export function Servers() {
                     Delete
                   </button>
                 </div>
+                </div>
+
+                {/* Sync result / last error banner */}
+                {syncResult && syncResult.ok && (
+                  <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-400">
+                    <span className="font-medium">Sync complete:</span>
+                    <span>
+                      {syncResult.added} new, {syncResult.updated} updated,{" "}
+                      {syncResult.removed} removed, {syncResult.unchanged} unchanged
+                    </span>
+                  </div>
+                )}
+                {syncResult && !syncResult.ok && (
+                  <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-red-500/10 border border-red-500/20 text-[11px] text-red-400 break-words">
+                    <span className="font-medium flex-shrink-0">Sync failed:</span>
+                    <span className="font-mono break-all">
+                      {syncResult.error || "Unknown error"}
+                    </span>
+                  </div>
+                )}
+                {!syncResult && server.lastSyncError && (
+                  <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-red-500/10 border border-red-500/20 text-[11px] text-red-400 break-words">
+                    <span className="font-medium flex-shrink-0">Last error:</span>
+                    <span className="font-mono break-all">
+                      {server.lastSyncError}
+                    </span>
+                  </div>
+                )}
               </div>
             )
           })}
