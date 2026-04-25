@@ -1,7 +1,29 @@
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { electronAPI } from "../lib/electron-api"
-import { PushDialog } from "./push-dialog"
+import { PushDialog, type PushDialogMode } from "./push-dialog"
+import { ManagePopover } from "../components/manage-popover"
+import {
+  computeServerStatus,
+  type DotColor,
+  type LocalSkillForStatus,
+  type RemoteSkillForStatus,
+} from "../lib/server-status"
+
+// ---------------------------------------------------------------------------
+// SHA-256 helper (Web Crypto, renderer-side)
+// ---------------------------------------------------------------------------
+
+async function sha256Hex(s: string): Promise<string> {
+  const enc = new TextEncoder().encode(s)
+  const buf = await crypto.subtle.digest("SHA-256", enc)
+  const bytes = new Uint8Array(buf)
+  let out = ""
+  for (let i = 0; i < bytes.length; i++) {
+    out += bytes[i].toString(16).padStart(2, "0")
+  }
+  return out
+}
 
 // ---------------------------------------------------------------------------
 // Relative time helper
@@ -269,6 +291,13 @@ export function Servers() {
     >
   >({})
   const [pushTarget, setPushTarget] = useState<RemoteServer | null>(null)
+  const [pushMode, setPushMode] = useState<PushDialogMode>("push")
+  const [manageOpenFor, setManageOpenFor] = useState<string | null>(null)
+  const manageAnchorRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const [localSkills, setLocalSkills] = useState<LocalSkillForStatus[]>([])
+  const [remoteSkillsByServer, setRemoteSkillsByServer] = useState<
+    Record<string, RemoteSkillForStatus[]>
+  >({})
 
   const loadServers = useCallback(async () => {
     try {
@@ -284,6 +313,69 @@ export function Servers() {
   useEffect(() => {
     loadServers()
   }, [loadServers])
+
+  // Load + hash local canonical skills once for status hints.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const list = (await electronAPI.listInstalled()) as Array<{
+          canonicalPath: string
+          scope: string
+        }>
+        const canonical = list.filter(
+          (s) => s.scope === "global" && s.canonicalPath,
+        )
+        const hashed: LocalSkillForStatus[] = []
+        for (const s of canonical) {
+          try {
+            const content = (await electronAPI.readSkillContent(
+              `${s.canonicalPath}/SKILL.md`,
+            )) as string
+            const folderName =
+              s.canonicalPath.split("/").filter(Boolean).pop() ?? ""
+            if (!folderName) continue
+            const hash = await sha256Hex(content)
+            hashed.push({ folderName, contentHash: hash })
+          } catch {
+            // Skip skills whose SKILL.md can't be read.
+          }
+        }
+        if (!cancelled) setLocalSkills(hashed)
+      } catch {
+        // Non-fatal — status hints will fall back to "in sync".
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Refresh per-server cached remote skills whenever the server list reloads.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const next: Record<string, RemoteSkillForStatus[]> = {}
+      for (const s of servers) {
+        try {
+          const rows = (await electronAPI.serversSkills(s.id)) as Array<{
+            remotePath: string
+            contentHash: string | null
+          }>
+          next[s.id] = rows.map((r) => ({
+            remotePath: r.remotePath,
+            contentHash: r.contentHash,
+          }))
+        } catch {
+          next[s.id] = []
+        }
+      }
+      if (!cancelled) setRemoteSkillsByServer(next)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [servers])
 
   async function handleSave(form: ServerFormData) {
     const data = {
@@ -481,24 +573,38 @@ export function Servers() {
                       {server.port !== 22 ? `:${server.port}` : ""}
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 mt-0.5">
-                    <span className="text-[11px] text-muted">
-                      {server.skillCount ?? 0} skill
-                      {(server.skillCount ?? 0) !== 1 ? "s" : ""}
-                    </span>
-                    <span className="text-[10px] text-muted">
-                      synced {relativeTime(server.lastSyncAt)}
-                    </span>
-                    {testResult && (
-                      <span
-                        className={`text-[10px] ${testResult.ok ? "text-emerald-400" : "text-red-400"}`}
-                      >
-                        {testResult.ok
-                          ? "Connection OK"
-                          : `Failed: ${testResult.error}`}
-                      </span>
-                    )}
-                  </div>
+                  {(() => {
+                    const status = computeServerStatus(
+                      server,
+                      localSkills,
+                      remoteSkillsByServer[server.id] ?? [],
+                    )
+                    const dotClass: Record<DotColor, string> = {
+                      green: "text-emerald-400",
+                      amber: "text-amber-400",
+                      red: "text-red-400",
+                      grey: "text-muted",
+                    }
+                    return (
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className={`text-[11px] ${dotClass[status.dotColor]}`}>
+                          {status.text}
+                        </span>
+                        <span className="text-[10px] text-muted">
+                          {server.lastSyncAt ? relativeTime(server.lastSyncAt) : ""}
+                        </span>
+                        {testResult && (
+                          <span
+                            className={`text-[10px] ${testResult.ok ? "text-emerald-400" : "text-red-400"}`}
+                          >
+                            {testResult.ok
+                              ? "Connection OK"
+                              : `Failed: ${testResult.error}`}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 {/* Actions */}
@@ -519,19 +625,17 @@ export function Servers() {
                     {isTesting ? "..." : "Test"}
                   </button>
                   <button
-                    onClick={() => handleSync(server.id)}
+                    ref={(el) => {
+                      manageAnchorRefs.current[server.id] = el
+                    }}
+                    onClick={() =>
+                      setManageOpenFor((prev) => (prev === server.id ? null : server.id))
+                    }
                     disabled={isSyncing}
-                    title="Sync skills"
-                    className="px-2 py-1.5 rounded-md text-[11px] font-medium text-muted hover:text-foreground hover:bg-background transition-colors disabled:opacity-40"
+                    title="Manage this server"
+                    className="px-2.5 py-1 rounded-md text-[11px] font-medium border border-border text-foreground hover:bg-background transition-colors disabled:opacity-40"
                   >
-                    {isSyncing ? "Syncing..." : "Sync"}
-                  </button>
-                  <button
-                    onClick={() => setPushTarget(server)}
-                    className="px-2.5 py-1 rounded-md text-[11px] font-medium border border-border text-foreground hover:bg-background transition-colors"
-                    title="Push local skills to this server"
-                  >
-                    Push
+                    {isSyncing ? "Syncing..." : "Manage ▾"}
                   </button>
                   <button
                     onClick={() => openEdit(server)}
@@ -591,11 +695,28 @@ export function Servers() {
         }}
         onSave={handleSave}
       />
+      {servers.map((server) => (
+        <ManagePopover
+          key={server.id}
+          open={manageOpenFor === server.id}
+          anchorEl={manageAnchorRefs.current[server.id] ?? null}
+          onRefresh={() => handleSync(server.id)}
+          onPush={() => {
+            setPushMode("push")
+            setPushTarget(server)
+          }}
+          onMirror={() => {
+            setPushMode("mirror")
+            setPushTarget(server)
+          }}
+          onClose={() => setManageOpenFor(null)}
+        />
+      ))}
       <PushDialog
         open={pushTarget !== null}
         serverId={pushTarget?.id ?? null}
         serverLabel={pushTarget?.label ?? ""}
-        mode="push"
+        mode={pushMode}
         onClose={() => {
           setPushTarget(null)
           loadServers()
