@@ -332,6 +332,89 @@ export async function scanRemoteSkills(
   return parseDelimitedOutput(catResult.stdout)
 }
 
+/**
+ * Upload an entire local skill directory to the remote server.
+ * Streams `tar -cf - -C <parentLocalDir> <folderName>` into
+ * `tar -xf - -C <remoteBaseDir>` over SSH.
+ *
+ * Both directories must already exist on the remote (caller ensures via mkdir -p).
+ */
+export async function uploadSkillDir(
+  server: RemoteServer,
+  parentLocalDir: string,
+  folderName: string,
+  remoteBaseDir: string,
+): Promise<void> {
+  // Ensure remote base dir exists first
+  const baseQuoted = shellQuotePath(remoteBaseDir)
+  const mkdirResult = await sshExec(server, `mkdir -p ${baseQuoted}`)
+  if (mkdirResult.exitCode !== 0) {
+    throw new Error(
+      mkdirResult.stderr.trim() || `mkdir -p failed for ${remoteBaseDir}`,
+    )
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const tarLocal = spawn("tar", ["-cf", "-", "-C", parentLocalDir, folderName], {
+      stdio: ["ignore", "pipe", "pipe"],
+    })
+
+    const sshArgs = [...buildSshArgs(server), `tar -xf - -C ${baseQuoted}`]
+    const tarRemote = spawn("ssh", sshArgs, {
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 120_000,
+    })
+
+    let localStderr = ""
+    let remoteStderr = ""
+    tarLocal.stderr.on("data", (c: Buffer) => (localStderr += c.toString("utf-8")))
+    tarRemote.stderr.on("data", (c: Buffer) => (remoteStderr += c.toString("utf-8")))
+
+    tarLocal.stdout.pipe(tarRemote.stdin)
+
+    tarLocal.on("error", (err) => reject(err))
+    tarRemote.on("error", (err) => reject(err))
+
+    tarRemote.on("close", (code) => {
+      if ((code ?? 1) === 0) {
+        resolve()
+      } else {
+        reject(
+          new Error(
+            remoteStderr.trim() ||
+              localStderr.trim() ||
+              `tar pipeline exited with code ${code ?? 1}`,
+          ),
+        )
+      }
+    })
+  })
+}
+
+/**
+ * Delete a single skill directory on the remote.
+ * Used only by Mirror mode. Caller is responsible for confirming with the user.
+ */
+export async function deleteRemoteSkillDir(
+  server: RemoteServer,
+  remoteSkillDir: string,
+): Promise<void> {
+  const quoted = shellQuotePath(remoteSkillDir)
+  // Refuse to delete the entire skills base path or anything ending in '/'
+  if (
+    !remoteSkillDir ||
+    remoteSkillDir === "/" ||
+    remoteSkillDir === server.skillsBasePath ||
+    remoteSkillDir === server.skillsBasePath.replace(/\/+$/, "")
+  ) {
+    throw new Error(`Refusing to delete suspicious remote path: ${remoteSkillDir}`)
+  }
+  const result = await sshExec(server, `rm -rf ${quoted}`)
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr.trim() || `rm -rf failed for ${remoteSkillDir}`)
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Sync orchestrator
 // ---------------------------------------------------------------------------
