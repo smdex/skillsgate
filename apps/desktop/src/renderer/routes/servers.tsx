@@ -595,6 +595,7 @@ export function Servers() {
         open={pushTarget !== null}
         serverId={pushTarget?.id ?? null}
         serverLabel={pushTarget?.label ?? ""}
+        mode="push"
         onClose={() => {
           setPushTarget(null)
           loadServers()
