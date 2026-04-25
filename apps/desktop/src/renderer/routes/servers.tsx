@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
 import { electronAPI } from "../lib/electron-api"
+import { PushDialog } from "./push-dialog"
 
 // ---------------------------------------------------------------------------
 // Relative time helper
@@ -267,6 +268,7 @@ export function Servers() {
       { ok: boolean; added?: number; updated?: number; removed?: number; unchanged?: number; error?: string }
     >
   >({})
+  const [pushTarget, setPushTarget] = useState<RemoteServer | null>(null)
 
   const loadServers = useCallback(async () => {
     try {
@@ -525,6 +527,13 @@ export function Servers() {
                     {isSyncing ? "Syncing..." : "Sync"}
                   </button>
                   <button
+                    onClick={() => setPushTarget(server)}
+                    className="px-2.5 py-1 rounded-md text-[11px] font-medium border border-border text-foreground hover:bg-background transition-colors"
+                    title="Push local skills to this server"
+                  >
+                    Push
+                  </button>
+                  <button
                     onClick={() => openEdit(server)}
                     title="Edit server"
                     className="px-2 py-1.5 rounded-md text-[11px] font-medium text-muted hover:text-foreground hover:bg-background transition-colors"
@@ -581,6 +590,15 @@ export function Servers() {
           setEditingServer(null)
         }}
         onSave={handleSave}
+      />
+      <PushDialog
+        open={pushTarget !== null}
+        serverId={pushTarget?.id ?? null}
+        serverLabel={pushTarget?.label ?? ""}
+        onClose={() => {
+          setPushTarget(null)
+          loadServers()
+        }}
       />
     </div>
   )
