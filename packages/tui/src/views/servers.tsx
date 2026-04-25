@@ -6,6 +6,7 @@ import { ConfirmDialog } from "../components/confirm-dialog.js"
 import { testConnection, syncRemoteServer } from "../db/ssh.js"
 import { colors } from "../utils/colors.js"
 import type { RemoteServer } from "../db/servers.js"
+import { PushDialog } from "./push-dialog.js"
 
 interface ServersViewProps {
   onServerCountChange: (count: number) => void
@@ -40,6 +41,7 @@ export function ServersView({ onServerCountChange }: ServersViewProps) {
   const [serverList, setServerList] = useState<RemoteServer[]>(() => servers.list())
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [pendingAction, setPendingAction] = useState<PendingAction>(null)
+  const [pushTarget, setPushTarget] = useState<RemoteServer | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncLog, setSyncLog] = useState<string[] | null>(null)
   const [testing, setTesting] = useState(false)
@@ -67,6 +69,7 @@ export function ServersView({ onServerCountChange }: ServersViewProps) {
     if (state.activeView !== "servers") return
     if (state.showHelp) return
     if (pendingAction) return
+    if (pushTarget) return
     if (syncing || testing) return
 
     // j/k or arrow keys
@@ -113,6 +116,12 @@ export function ServersView({ onServerCountChange }: ServersViewProps) {
     // S = sync selected server
     if (key.name === "S" && selectedServer) {
       handleSync(selectedServer)
+      return
+    }
+
+    // P = push to selected server
+    if (key.name === "P" && selectedServer) {
+      setPushTarget(selectedServer)
       return
     }
 
@@ -192,6 +201,19 @@ export function ServersView({ onServerCountChange }: ServersViewProps) {
       })
     }
   }, [servers, skills, dispatch, refreshList])
+
+  // Push dialog
+  if (pushTarget) {
+    return (
+      <PushDialog
+        server={pushTarget}
+        onClose={() => {
+          setPushTarget(null)
+          refreshList()
+        }}
+      />
+    )
+  }
 
   // Confirm dialog for delete
   if (pendingAction?.type === "delete") {
@@ -327,7 +349,7 @@ export function ServersView({ onServerCountChange }: ServersViewProps) {
           {/* Bottom shortcut hints */}
           <box style={{ height: 1, paddingLeft: 1, backgroundColor: colors.bgAlt }}>
             <text fg={colors.textDim}>
-              S=sync  Enter=browse  a=add  e=edit  d=delete  t=test
+              S=sync  P=push  Enter=browse  a=add  e=edit  d=delete  t=test
             </text>
           </box>
         </box>
@@ -400,7 +422,7 @@ function ServerDetailPanel({ server, skillCount }: ServerDetailPanelProps) {
       ) : null}
 
       <text fg={colors.border}>---</text>
-      <text fg={colors.textDim}>S=sync  t=test  e=edit  d=delete  Enter=browse skills</text>
+      <text fg={colors.textDim}>S=sync  P=push  t=test  e=edit  d=delete  Enter=browse skills</text>
     </box>
   )
 }

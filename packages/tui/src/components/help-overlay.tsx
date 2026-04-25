@@ -29,6 +29,7 @@ const SHORTCUTS_RIGHT: ShortcutEntry[] = [
   { key: "", description: "" },
   { key: "-- Servers View --", description: "" },
   { key: "S", description: "Sync selected server" },
+  { key: "P", description: "push local skills to selected server" },
   { key: "a", description: "Add new server" },
   { key: "e", description: "Edit server" },
   { key: "t", description: "Test connection" },
