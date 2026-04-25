@@ -1971,4 +1971,4 @@ Add your skill instructions here.
 }
 
 // Export for use by file-watcher and main process
-export { listInstalledSkills, rescanAndCache, rescanSingleSkill, detectAgents, agentRegistry }
+export { listInstalledSkills, listInstalledSkillsInternal, rescanAndCache, rescanSingleSkill, detectAgents, agentRegistry }
