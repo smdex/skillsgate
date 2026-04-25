@@ -11,6 +11,8 @@ import { RemoteServerStore } from "./db/servers"
 import { RemoteSkillStore } from "./db/skills"
 import { loadCachedSkills, saveCachedSkills } from "./db/skills-cache"
 import { testConnection, syncRemoteServer, readRemoteFile, writeRemoteFile } from "./db/ssh"
+import { planPush, applyPush } from "./db/push"
+import type { PushPreview } from "./db/push"
 import { checkForAppUpdates, getUpdateState, quitAndInstallUpdate } from "./auto-updater"
 
 // ---------------------------------------------------------------------------
@@ -1861,6 +1863,36 @@ Add your skill instructions here.
         .digest("hex")
       skillStore.updateContent(serverId, remotePath, content, contentHash)
       return { ok: true }
+    },
+  )
+
+  ipcMain.handle(
+    "servers:push-preview",
+    async (_event, serverId: string, mirror: boolean) => {
+      ensureStores()
+      const server = serverStore.get(serverId)
+      if (!server) throw new Error("Server not found")
+      return planPush(server, { mirror })
+    },
+  )
+
+  ipcMain.handle(
+    "servers:push-apply",
+    async (_event, serverId: string, preview: PushPreview) => {
+      ensureStores()
+      const server = serverStore.get(serverId)
+      if (!server) throw new Error("Server not found")
+      const result = await applyPush(server, preview)
+      // Refresh remote_skills cache so the UI shows post-push state correctly
+      try {
+        await syncRemoteServer(
+          { remoteServers: serverStore, remoteSkills: skillStore },
+          server,
+        )
+      } catch {
+        // Non-fatal: push already happened; cache will refresh on next sync.
+      }
+      return result
     },
   )
 

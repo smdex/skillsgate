@@ -69,6 +69,17 @@ declare global {
     error?: string
   }
 
+  interface PushPlanEntry {
+    folderName: string
+    name: string
+    localPath: string
+    remotePath: string
+    remoteDir: string
+    reason: "added" | "updated" | "deleted" | "unchanged"
+    localHash?: string
+    remoteHash?: string
+  }
+
   interface UpdateState {
     status:
       | "idle"
@@ -160,6 +171,23 @@ declare global {
       content: string,
     ) => Promise<{ ok: boolean }>
     serversCount: () => Promise<number>
+    serversPushPreview: (serverId: string, mirror: boolean) => Promise<{
+      toAdd: PushPlanEntry[]
+      toUpdate: PushPlanEntry[]
+      toDelete: PushPlanEntry[]
+      unchanged: PushPlanEntry[]
+      mirror: boolean
+    }>
+    serversPushApply: (
+      serverId: string,
+      preview: unknown,
+    ) => Promise<{
+      added: number
+      updated: number
+      deleted: number
+      unchanged: number
+      errors: { folderName: string; message: string }[]
+    }>
 
     // Settings
     settingsGet: <T>(key: string, defaultValue: T) => Promise<T>
