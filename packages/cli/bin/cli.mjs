@@ -25,13 +25,33 @@ const binName = platform === "win32" ? "skillsgate-tui.exe" : "skillsgate-tui";
 const require = createRequire(import.meta.url);
 const thisDir = path.dirname(fileURLToPath(import.meta.url));
 
-function findBinary() {
+function getNpmGlobalRoot() {
+  try {
+    return execFileSync("npm", ["root", "-g"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 10000,
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+function findBinary({ includeGlobal = false } = {}) {
   const candidates = [
     // Nested node_modules (local installs)
     () => require.resolve(`@skillsgate/${pkg}/${binName}`),
     // Sibling in global node_modules (npm install -g)
-    () => path.join(thisDir, "..", "..", "..", `@skillsgate/${pkg}`, binName),
+    () => path.join(thisDir, "..", "..", `@skillsgate/${pkg}`, binName),
   ];
+
+  if (includeGlobal) {
+    candidates.push(() => {
+      const globalRoot = getNpmGlobalRoot();
+      if (!globalRoot) throw new Error("npm global root not found");
+      return path.join(globalRoot, `@skillsgate/${pkg}`, binName);
+    });
+  }
 
   for (const resolve of candidates) {
     try {
@@ -54,15 +74,15 @@ if (!binPath) {
   console.error(`Installing platform binary (${fullPkg})...`);
   try {
     execSync(`npm install -g ${fullPkg} --no-save`, { stdio: "inherit", timeout: 30000 });
-    binPath = findBinary();
+    binPath = findBinary({ includeGlobal: true });
   } catch {
     // Fallback to latest if exact version is not published for this platform
     console.warn(`Could not install ${fullPkg}, falling back to @latest (versions may differ)`);
     try {
       execSync(`npm install -g @skillsgate/${pkg}@latest --no-save`, { stdio: "inherit", timeout: 30000 });
-      binPath = findBinary();
+      binPath = findBinary({ includeGlobal: true });
     } catch {
-      // fall through to error below
+      binPath = findBinary({ includeGlobal: true });
     }
   }
 }
