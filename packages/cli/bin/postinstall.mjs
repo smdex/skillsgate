@@ -21,7 +21,7 @@ const pkg = platformMap[os.platform()]?.[os.arch()];
 if (!pkg) process.exit(0);
 
 // Check if already available as a sibling (optionalDeps worked)
-const siblingPath = path.join(thisDir, "..", "..", "..", `@skillsgate/${pkg}`);
+const siblingPath = path.join(thisDir, "..", "..", `@skillsgate/${pkg}`);
 if (fs.existsSync(siblingPath)) process.exit(0);
 
 // Also check nested node_modules

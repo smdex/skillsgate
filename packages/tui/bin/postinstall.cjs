@@ -16,7 +16,7 @@ const pkg = platformMap[os.platform()]?.[os.arch()];
 if (!pkg) process.exit(0);
 
 // Check if already available as a sibling (optionalDeps worked)
-const siblingPath = path.join(__dirname, "..", "..", "..", `@skillsgate/${pkg}`);
+const siblingPath = path.join(__dirname, "..", "..", `@skillsgate/${pkg}`);
 if (fs.existsSync(siblingPath)) process.exit(0);
 
 // Also check nested node_modules
@@ -27,11 +27,20 @@ try {
 
 // Not found — install it explicitly
 const version = require("../package.json").version;
+const fullPkg = `@skillsgate/${pkg}@${version}`;
 try {
-  execSync(`npm install -g @skillsgate/${pkg}@${version} --no-save`, {
+  execSync(`npm install -g ${fullPkg} --no-save`, {
     stdio: "inherit",
     timeout: 30000,
   });
 } catch {
-  console.warn(`Warning: could not install @skillsgate/${pkg}. Run manually: npm install -g @skillsgate/${pkg}`);
+  console.warn(`Could not install ${fullPkg}, falling back to @latest (versions may differ)`);
+  try {
+    execSync(`npm install -g @skillsgate/${pkg}@latest --no-save`, {
+      stdio: "inherit",
+      timeout: 30000,
+    });
+  } catch {
+    console.warn(`Warning: could not install @skillsgate/${pkg}. Run manually: npm install -g @skillsgate/${pkg}`);
+  }
 }
