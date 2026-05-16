@@ -15,6 +15,12 @@ export function AgentFilter() {
   const { servers } = useDb()
 
   const allCount = state.installedSkills.length
+  // Count favorites that are currently installed.
+  const favSet = new Set(state.favorites)
+  const favoritesCount = state.installedSkills.reduce(
+    (n, s) => (favSet.has(s.name) ? n + 1 : n),
+    0,
+  )
 
   // Remote servers with skill counts
   const serverList = servers.list()
@@ -38,7 +44,7 @@ export function AgentFilter() {
     if (state.focusedPane !== "agents") return
     if (state.showHelp) return
 
-    const allOptions = ["all", ...agentOptions.map((o) => o.value)]
+    const allOptions = ["all", "favorites", ...agentOptions.map((o) => o.value)]
     const currentIdx = allOptions.indexOf(state.selectedAgentFilter)
 
     if (key.name === "up" || (key.name === "k" && !key.ctrl)) {
@@ -82,6 +88,21 @@ export function AgentFilter() {
           All Skills
         </text>
         <text fg={colors.textDim}> ({allCount})</text>
+      </box>
+
+      {/* Favorites */}
+      <box
+        style={{
+          paddingLeft: 1,
+          paddingRight: 1,
+          height: 1,
+          backgroundColor: state.selectedAgentFilter === "favorites" ? colors.bgAlt : "transparent",
+        }}
+      >
+        <text fg={state.selectedAgentFilter === "favorites" ? colors.primary : colors.text}>
+          {"★ "}Favorites
+        </text>
+        <text fg={colors.textDim}> ({favoritesCount})</text>
       </box>
 
       {/* Spacer */}

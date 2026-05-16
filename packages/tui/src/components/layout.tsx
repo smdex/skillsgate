@@ -4,6 +4,7 @@ import { useStore, useDispatch } from "../store/context.js"
 import { useDb } from "../db/context.js"
 import { useDetectedAgents } from "../data/use-agents.js"
 import { useInstalledSkills } from "../data/use-installed-skills.js"
+import { useFavorites } from "../data/use-favorites.js"
 import { StatusBar } from "./status-bar.js"
 import { HelpOverlay } from "./help-overlay.js"
 import { HomeView } from "../views/home.js"
@@ -38,6 +39,7 @@ export function Layout() {
   // Load agent + skill data on mount
   useDetectedAgents()
   useInstalledSkills()
+  useFavorites()
 
   // Global keyboard shortcuts
   useKeyboard((key) => {

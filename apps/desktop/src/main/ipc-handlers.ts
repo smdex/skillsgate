@@ -9,6 +9,7 @@ import { openDb } from "./db/index"
 import { SettingsStore } from "./db/settings"
 import { RemoteServerStore } from "./db/servers"
 import { RemoteSkillStore } from "./db/skills"
+import { FavoritesStore } from "./db/favorites"
 import { loadCachedSkills, saveCachedSkills } from "./db/skills-cache"
 import { testConnection, syncRemoteServer, readRemoteFile, writeRemoteFile } from "./db/ssh"
 import { planPush, applyPush } from "./db/push"
@@ -1174,9 +1175,10 @@ async function installSkillToAgent(
 let settingsStore!: SettingsStore
 let serverStore!: RemoteServerStore
 let skillStore!: RemoteSkillStore
+let favoritesStore!: FavoritesStore
 
 function ensureStores(): void {
-  if (settingsStore && serverStore && skillStore) {
+  if (settingsStore && serverStore && skillStore && favoritesStore) {
     return
   }
 
@@ -1184,6 +1186,7 @@ function ensureStores(): void {
   settingsStore ??= new SettingsStore(db)
   serverStore ??= new RemoteServerStore(db)
   skillStore ??= new RemoteSkillStore(db)
+  favoritesStore ??= new FavoritesStore(db)
 }
 
 const COMMON_BIN_DIRS = [
@@ -1918,6 +1921,20 @@ Add your skill instructions here.
   ipcMain.handle("settings:all", () => {
     ensureStores()
     return settingsStore.getAll()
+  })
+
+  // -------------------------------------------------------------------------
+  // Favorites handlers
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle("favorites:list", () => {
+    ensureStores()
+    return favoritesStore.list()
+  })
+
+  ipcMain.handle("favorites:toggle", (_event, name: string) => {
+    ensureStores()
+    return favoritesStore.toggle(name)
   })
 
   // -------------------------------------------------------------------------

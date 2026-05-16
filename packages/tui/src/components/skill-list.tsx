@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useKeyboard } from "@opentui/react"
 import { useStore, useDispatch } from "../store/context.js"
 import { useSkillActions } from "../data/use-skill-actions.js"
+import { useFavorites } from "../data/use-favorites.js"
 import { SkillListItem } from "./skill-list-item.js"
 import { ConfirmDialog } from "./confirm-dialog.js"
 import { colors, agentBadges as badgeMap } from "../utils/colors.js"
@@ -30,6 +31,8 @@ export function SkillList({ skills }: SkillListProps) {
   const dispatch = useDispatch()
   const state = useStore()
   const { removeSkill, removeSkillFromOneAgent, updateSkill } = useSkillActions()
+  const { favorites, toggleFavorite } = useFavorites()
+  const favoritesSet = useMemo(() => new Set(favorites), [favorites])
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [pendingAction, setPendingAction] = useState<PendingAction>(null)
   const [removeMode, setRemoveMode] = useState<RemoveMode>(null)
@@ -113,6 +116,21 @@ export function SkillList({ skills }: SkillListProps) {
     // u to update selected skill
     if (key.name === "u" && skills[selectedIndex]) {
       setPendingAction({ type: "update", skill: skills[selectedIndex] })
+    }
+
+    // f to toggle favorite for selected skill
+    if (key.name === "f" && skills[selectedIndex]) {
+      const skill = skills[selectedIndex]
+      const isFavoritedAfter = toggleFavorite(skill.name)
+      dispatch({
+        type: "SHOW_NOTIFICATION",
+        notification: {
+          type: "info",
+          message: isFavoritedAfter
+            ? `Added "${skill.name}" to favorites`
+            : `Removed "${skill.name}" from favorites`,
+        },
+      })
     }
   })
 
@@ -201,7 +219,9 @@ export function SkillList({ skills }: SkillListProps) {
         <text fg={colors.textDim}>
           {state.installedLoading
             ? "Scanning for installed skills..."
-            : "No skills found. Install skills with: skillsgate install <source>"}
+            : state.selectedAgentFilter === "favorites"
+              ? "No favorites yet. Press f on any skill to save it here."
+              : "No skills found. Install skills with: skillsgate install <source>"}
         </text>
       </box>
     )
@@ -237,6 +257,7 @@ export function SkillList({ skills }: SkillListProps) {
             key={skill.name}
             skill={skill}
             selected={i === selectedIndex}
+            favorited={favoritesSet.has(skill.name)}
           />
         ))}
       </scrollbox>

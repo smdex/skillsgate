@@ -73,8 +73,11 @@ export function HomeView() {
       skills = skills.filter((skill) => ids.has(skill.canonicalPath))
     }
 
-    // Agent filter
-    if (state.selectedAgentFilter !== "all") {
+    // Agent filter (or favorites)
+    if (state.selectedAgentFilter === "favorites") {
+      const favSet = new Set(state.favorites)
+      skills = skills.filter((s) => favSet.has(s.name))
+    } else if (state.selectedAgentFilter !== "all") {
       skills = skills.filter((s) =>
         s.agents.includes(state.selectedAgentFilter as any)
       )
@@ -96,7 +99,7 @@ export function HomeView() {
     }
 
     return skills
-  }, [state.installedSkills, state.selectedAgentFilter, state.installedFilter, selectedCollection, collections, collectionsVersion])
+  }, [state.installedSkills, state.selectedAgentFilter, state.installedFilter, state.favorites, selectedCollection, collections, collectionsVersion])
 
   useKeyboard((key) => {
     if (state.activeView !== "home") return
@@ -383,7 +386,7 @@ function DetailPanel({ skill, collections, selectedCollection }: DetailPanelProp
         <text>{" "}</text>
 
         {/* Shortcut hints */}
-        <text fg={colors.textDim}>v=view detail  d=remove  u=update  n=create skill  c=collections  Tab=switch pane</text>
+        <text fg={colors.textDim}>v=view detail  d=remove  u=update  f=favorite  n=create skill  c=collections  Tab=switch pane</text>
         <text fg={colors.border}>---</text>
 
         {/* SKILL.md content */}
