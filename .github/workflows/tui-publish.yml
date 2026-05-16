@@ -37,14 +37,16 @@ jobs:
         working-directory: packages/tui
         shell: bash
         run: |
+          # Pin the explicit-add to the versions in package.json. Without the
+          # pins, `bun install <pkg>` resolves to latest and silently bumps
+          # past the major version our source targets — breaking cross-compile
+          # when the upstream file layout changes (e.g. index.ts -> index.bun.js).
+          CORE_VERSION=$(node -p "require('./package.json').dependencies['@opentui/core']")
+          REACT_VERSION=$(node -p "require('./package.json').dependencies['@opentui/react']")
           bun install --no-save --ignore-scripts 2>/dev/null || true
-          bun install @opentui/core @opentui/react react gray-matter
+          bun install "@opentui/core@${CORE_VERSION}" "@opentui/react@${REACT_VERSION}" react gray-matter
           # Install target platform native binary for cross-compilation (hoisted to root).
           # Use npm --force to bypass os/cpu platform checks when cross-compiling.
-          # Pin the platform package to the same version as @opentui/core in
-          # packages/tui/package.json so the resolved file layout (e.g. index.ts)
-          # stays in sync across major upstream versions.
-          CORE_VERSION=$(node -p "require('./package.json').dependencies['@opentui/core']")
           cd ../..
           npm install --no-save --force "@opentui/core-${PKG#tui-}@${CORE_VERSION}"
         env:
