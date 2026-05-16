@@ -10,6 +10,7 @@ export const initialState: AppState = {
   installedSkills: [],
   installedLoading: true,
   installedFilter: "",
+  favorites: [],
   searchQuery: "",
   searchResults: [],
   searchLoading: false,
@@ -60,6 +61,9 @@ export function appReducer(state: AppState, action: Action): AppState {
 
     case "SET_INSTALLED_FILTER":
       return { ...state, installedFilter: action.filter }
+
+    case "SET_FAVORITES":
+      return { ...state, favorites: action.favorites }
 
     case "SET_SEARCH_QUERY":
       return { ...state, searchQuery: action.query }

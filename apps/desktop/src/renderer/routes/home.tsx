@@ -35,6 +35,29 @@ const DISPLAY_NAME_TO_KEY: Record<string, string> = {
   "Universal (.agents/skills)": "universal",
 }
 
+function StarIcon({
+  size = 14,
+  filled = false,
+}: {
+  size?: number
+  filled?: boolean
+}) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  )
+}
+
 function SearchIcon({ size = 16 }: { size?: number }) {
   return (
     <svg
@@ -139,6 +162,7 @@ interface DragToast {
 
 interface LeftSidebarProps {
   totalSkillCount: number
+  favoritesCount: number
   agentsWithSkills: DetectedAgent[]
   agentSkillCounts: Record<string, number>
   selectedAgent: string | null
@@ -161,6 +185,7 @@ interface LeftSidebarProps {
 
 function LeftSidebar({
   totalSkillCount,
+  favoritesCount,
   agentsWithSkills,
   agentSkillCounts,
   selectedAgent,
@@ -224,7 +249,7 @@ function LeftSidebar({
                 activeFilter === "favorites" ? "text-foreground" : "text-muted"
               }`}
             >
-              0
+              {favoritesCount}
             </span>
           </button>
         </nav>
@@ -380,8 +405,10 @@ interface SkillRowProps {
   isMultiSelectActive: boolean
   selectedSkillPath: string | null
   dragSkill: DragSkillPayload | null
+  favorites: Set<string>
   onSelectSkill: (skill: InstalledSkill) => void
   onMultiSelectToggle: (skill: InstalledSkill, e: React.MouseEvent) => void
+  onToggleFavorite: (skill: InstalledSkill, e: React.MouseEvent) => void
   onDragSkillStart: (skill: InstalledSkill) => void
   onDragSkillEnd: () => void
 }
@@ -394,14 +421,17 @@ const SkillListRow = memo(function SkillListRow({
   isMultiSelectActive,
   selectedSkillPath,
   dragSkill,
+  favorites,
   onSelectSkill,
   onMultiSelectToggle,
+  onToggleFavorite,
   onDragSkillStart,
   onDragSkillEnd,
 }: SkillRowProps) {
   const skill = skills[index]
   if (!skill) return null
   const isMultiChecked = multiSelected.has(skill.canonicalPath)
+  const isFavorited = favorites.has(skill.name)
 
   return (
     <div style={style} className="px-0.5">
@@ -453,6 +483,27 @@ const SkillListRow = memo(function SkillListRow({
         <span className="text-[12px] font-medium truncate flex-1 min-w-0">
           {skill.name}
         </span>
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
+          aria-pressed={isFavorited}
+          title={isFavorited ? "Remove from favorites" : "Add to favorites"}
+          onClick={(e) => onToggleFavorite(skill, e)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault()
+              onToggleFavorite(skill, e as unknown as React.MouseEvent)
+            }
+          }}
+          className={`ml-2 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 rounded transition-colors cursor-pointer ${
+            isFavorited
+              ? "text-amber-400 hover:text-amber-300"
+              : "text-muted hover:text-foreground"
+          }`}
+        >
+          <StarIcon size={13} filled={isFavorited} />
+        </span>
         <span className="ml-2 flex-shrink-0">
           <AgentLogoRow agents={skill.agents} size={14} />
         </span>
@@ -475,6 +526,7 @@ interface MiddlePanelProps {
   onSelectSkill: (skill: InstalledSkill) => void
   selectedAgent: string | null
   selectedCollection: string | null
+  activeFilter: "all" | "favorites"
   onClearFilters: () => void
   onCreateSkill: () => void
   dragSkill: DragSkillPayload | null
@@ -484,6 +536,8 @@ interface MiddlePanelProps {
   onMultiSelectToggle: (skill: InstalledSkill, e: React.MouseEvent) => void
   onMultiSelectAll: () => void
   onMultiSelectClear: () => void
+  favorites: Set<string>
+  onToggleFavorite: (skill: InstalledSkill, e: React.MouseEvent) => void
   collections: Record<string, string[]>
   onBulkAddToCollection: (collectionName: string) => void
   onBulkCreateCollection: () => void
@@ -501,6 +555,7 @@ function MiddlePanel({
   onSelectSkill,
   selectedAgent,
   selectedCollection,
+  activeFilter,
   onClearFilters,
   onCreateSkill,
   dragSkill,
@@ -510,6 +565,8 @@ function MiddlePanel({
   onMultiSelectToggle,
   onMultiSelectAll,
   onMultiSelectClear,
+  favorites,
+  onToggleFavorite,
   collections,
   onBulkAddToCollection,
   onBulkCreateCollection,
@@ -526,8 +583,10 @@ function MiddlePanel({
       isMultiSelectActive,
       selectedSkillPath,
       dragSkill,
+      favorites,
       onSelectSkill,
       onMultiSelectToggle,
+      onToggleFavorite,
       onDragSkillStart,
       onDragSkillEnd,
     }),
@@ -537,8 +596,10 @@ function MiddlePanel({
       isMultiSelectActive,
       selectedSkillPath,
       dragSkill,
+      favorites,
       onSelectSkill,
       onMultiSelectToggle,
+      onToggleFavorite,
       onDragSkillStart,
       onDragSkillEnd,
     ],
@@ -638,6 +699,13 @@ function MiddlePanel({
                 </p>
                 <p className="text-muted text-[11px] mt-1">
                   Head to Discover to find skills.
+                </p>
+              </>
+            ) : activeFilter === "favorites" ? (
+              <>
+                <p className="text-muted text-[12px]">No favorites yet.</p>
+                <p className="text-muted text-[11px] mt-1">
+                  Click the star on any skill to save it here.
                 </p>
               </>
             ) : (
@@ -1484,6 +1552,7 @@ export function Home() {
   const deferredSearchQuery = useDeferredValue(searchQuery)
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
   const [activeFilter, setActiveFilter] = useState<"all" | "favorites">("all")
+  const [favorites, setFavorites] = useState<Set<string>>(new Set())
   const [selectedSkillPath, setSelectedSkillPath] = useState<string | null>(null)
   const [skillContent, setSkillContent] = useState<string | null>(null)
   const [contentLoading, setContentLoading] = useState(false)
@@ -1529,17 +1598,24 @@ export function Home() {
   useEffect(() => {
     async function load() {
       try {
-        const [detectedAgents, installedSkills, savedCollections, savedDefaultAgents] =
-          await Promise.all([
+        const [
+          detectedAgents,
+          installedSkills,
+          savedCollections,
+          savedDefaultAgents,
+          savedFavorites,
+        ] = await Promise.all([
           electronAPI.detectAgents(),
           electronAPI.listInstalled(),
           electronAPI.settingsGet("collections.skills", {} as Record<string, string[]>),
           electronAPI.settingsGet("install.defaultAgents", [] as string[]),
+          electronAPI.favoritesList(),
         ])
         setAgents(detectedAgents)
         setSkills(installedSkills)
         setCollections(savedCollections || {})
         setDefaultAgents(savedDefaultAgents || [])
+        setFavorites(new Set(savedFavorites))
       } catch (err) {
         console.error("Failed to load installed skills:", err)
       } finally {
@@ -1642,6 +1718,10 @@ export function Home() {
   const filteredSkills = useMemo(() => {
     let result = skills
 
+    if (activeFilter === "favorites") {
+      result = result.filter((s) => favorites.has(s.name))
+    }
+
     if (selectedCollection) {
       const ids = new Set(collections[selectedCollection] || [])
       result = result.filter((s) => ids.has(s.canonicalPath))
@@ -1668,7 +1748,15 @@ export function Home() {
     }
 
     return result
-  }, [skills, selectedAgent, deferredSearchQuery, selectedCollection, collections])
+  }, [
+    skills,
+    selectedAgent,
+    deferredSearchQuery,
+    selectedCollection,
+    collections,
+    activeFilter,
+    favorites,
+  ])
 
   const collectionCounts = useMemo(() => {
     const counts: Record<string, number> = {}
@@ -1684,9 +1772,49 @@ export function Home() {
     return agents.filter((a) => (agentSkillCounts[a.displayName] || 0) > 0)
   }, [agents, agentSkillCounts])
 
+  // Count favorites that are currently installed (orphan favorites are
+  // preserved in the DB but not shown in the sidebar count).
+  const installedFavoritesCount = useMemo(
+    () => skills.reduce((n, s) => (favorites.has(s.name) ? n + 1 : n), 0),
+    [skills, favorites],
+  )
+
   const handleSelectSkill = useCallback((skill: InstalledSkill) => {
     setSelectedSkillPath(skill.canonicalPath)
   }, [])
+
+  const handleToggleFavorite = useCallback(
+    async (skill: InstalledSkill, e: React.MouseEvent) => {
+      e.stopPropagation()
+      const name = skill.name
+      // Optimistic update
+      setFavorites((prev) => {
+        const next = new Set(prev)
+        if (next.has(name)) next.delete(name)
+        else next.add(name)
+        return next
+      })
+      try {
+        const isFavoritedAfter = await electronAPI.favoritesToggle(name)
+        setFavorites((prev) => {
+          const next = new Set(prev)
+          if (isFavoritedAfter) next.add(name)
+          else next.delete(name)
+          return next
+        })
+      } catch (err) {
+        console.error("Failed to toggle favorite:", err)
+        // Revert on failure
+        setFavorites((prev) => {
+          const next = new Set(prev)
+          if (next.has(name)) next.delete(name)
+          else next.add(name)
+          return next
+        })
+      }
+    },
+    [],
+  )
 
   const handleClearFilters = useCallback(() => {
     setSearchQuery("")
@@ -2074,6 +2202,7 @@ export function Home() {
       {/* Column 1: Left sidebar (filter panel) */}
       <MemoizedLeftSidebar
         totalSkillCount={skills.length}
+        favoritesCount={installedFavoritesCount}
         agentsWithSkills={agentsWithSkills}
         agentSkillCounts={agentSkillCounts}
         selectedAgent={selectedAgent}
@@ -2105,6 +2234,7 @@ export function Home() {
         onSelectSkill={handleSelectSkill}
         selectedAgent={selectedAgent}
         selectedCollection={selectedCollection}
+        activeFilter={activeFilter}
         onClearFilters={handleClearFilters}
         onCreateSkill={handleOpenCreateSkill}
         dragSkill={dragSkill}
@@ -2114,6 +2244,8 @@ export function Home() {
         onMultiSelectToggle={handleMultiSelectToggle}
         onMultiSelectAll={handleMultiSelectAll}
         onMultiSelectClear={handleMultiSelectClear}
+        favorites={favorites}
+        onToggleFavorite={handleToggleFavorite}
         collections={collections}
         onBulkAddToCollection={handleBulkAddToCollection}
         onBulkCreateCollection={handleBulkCreateCollection}

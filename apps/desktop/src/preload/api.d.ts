@@ -194,6 +194,10 @@ declare global {
     settingsSet: (key: string, value: unknown) => Promise<void>
     settingsAll: () => Promise<Record<string, unknown>>
 
+    // Favorites
+    favoritesList: () => Promise<string[]>
+    favoritesToggle: (name: string) => Promise<boolean>
+
     updatesGetState: () => Promise<UpdateState>
     updatesCheck: () => Promise<UpdateState>
     updatesInstall: () => Promise<void>

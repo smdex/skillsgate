@@ -70,6 +70,17 @@ const MIGRATIONS: Migration[] = [
       INSERT OR IGNORE INTO schema_version VALUES (2);
     `,
   },
+  {
+    version: 3,
+    up: `
+      CREATE TABLE IF NOT EXISTS favorites (
+        skill_name TEXT PRIMARY KEY,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      INSERT OR IGNORE INTO schema_version VALUES (3);
+    `,
+  },
 ]
 
 function getCurrentVersion(db: Database): number {

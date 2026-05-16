@@ -63,10 +63,13 @@ export interface AppState {
   detectedAgents: DetectedAgent[]
 
   // Installed skills (home view)
-  selectedAgentFilter: string // agent name or "all"
+  selectedAgentFilter: string // agent name, "all", or "favorites"
   installedSkills: EnrichedSkill[]
   installedLoading: boolean
   installedFilter: string
+
+  // Favorites (skill names)
+  favorites: string[]
 
   // Search / discover
   searchQuery: string
@@ -98,6 +101,7 @@ export type Action =
   | { type: "SET_INSTALLED_SKILLS"; skills: EnrichedSkill[] }
   | { type: "SET_INSTALLED_LOADING"; loading: boolean }
   | { type: "SET_INSTALLED_FILTER"; filter: string }
+  | { type: "SET_FAVORITES"; favorites: string[] }
   | { type: "SET_SEARCH_QUERY"; query: string }
   | { type: "SET_SEARCH_RESULTS"; results: unknown[] }
   | { type: "SET_SEARCH_LOADING"; loading: boolean }

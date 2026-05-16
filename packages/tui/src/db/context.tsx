@@ -3,12 +3,14 @@ import type { Database } from "bun:sqlite"
 import { SettingsStore } from "./settings.js"
 import { RemoteServerStore } from "./servers.js"
 import { RemoteSkillStore } from "./skills.js"
+import { FavoritesStore } from "./favorites.js"
 
 export interface DbContext {
   db: Database
   settings: SettingsStore
   servers: RemoteServerStore
   skills: RemoteSkillStore
+  favorites: FavoritesStore
 }
 
 const DbCtx = createContext<DbContext | null>(null)
@@ -24,6 +26,7 @@ export function DbProvider({ db, children }: DbProviderProps) {
     settings: new SettingsStore(db),
     servers: new RemoteServerStore(db),
     skills: new RemoteSkillStore(db),
+    favorites: new FavoritesStore(db),
   }
 
   return <DbCtx.Provider value={ctx}>{children}</DbCtx.Provider>

@@ -103,6 +103,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("settings:set", key, value),
   settingsAll: () => ipcRenderer.invoke("settings:all"),
 
+  // Favorites
+  favoritesList: () => ipcRenderer.invoke("favorites:list"),
+  favoritesToggle: (name: string) =>
+    ipcRenderer.invoke("favorites:toggle", name),
+
   // Updates
   updatesGetState: () => ipcRenderer.invoke("updates:get-state"),
   updatesCheck: () => ipcRenderer.invoke("updates:check"),

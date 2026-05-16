@@ -4,13 +4,14 @@ import { colors, agentBadges as badgeMap } from "../utils/colors.js"
 interface SkillListItemProps {
   skill: EnrichedSkill
   selected?: boolean
+  favorited?: boolean
 }
 
 /**
  * Compact skill list item for the middle panel.
  * Shows just the name and small agent dot indicators.
  */
-export function SkillListItem({ skill, selected }: SkillListItemProps) {
+export function SkillListItem({ skill, selected, favorited }: SkillListItemProps) {
   // Build compact agent dots (single-char badges)
   const agentDots = skill.agents.slice(0, 3).map((a) => {
     const badge = badgeMap[a]
@@ -27,6 +28,11 @@ export function SkillListItem({ skill, selected }: SkillListItemProps) {
         backgroundColor: selected ? colors.bgAlt : "transparent",
       }}
     >
+      {/* Star indicator (favorited skills only) */}
+      <text fg={favorited ? colors.warning : colors.textDim}>
+        {favorited ? "★ " : "  "}
+      </text>
+
       {/* Skill name */}
       <text fg={selected ? colors.primary : colors.text} style={{ flexGrow: 1 }}>
         {skill.name}
