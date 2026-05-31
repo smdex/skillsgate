@@ -13,7 +13,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/npm/v/skillsgate?color=a8a29e&label=npm" alt="npm version" />
-  <img src="https://img.shields.io/badge/skills-91k+-a8a29e" alt="91k+ skills" />
+  <img src="https://img.shields.io/badge/powered_by-skills.sh-a8a29e" alt="powered by skills.sh" />
   <img src="https://img.shields.io/badge/agents-20-a8a29e" alt="20 agents" />
   <img src="https://img.shields.io/badge/license-MIT-a8a29e" alt="MIT license" />
 </p>
@@ -26,7 +26,7 @@
 
 ## What is SkillsGate?
 
-SkillsGate lets you browse, install, and manage AI agent skills from a single interface. It works with 20+ agents and gives you access to a catalog of 91,000+ skills.
+SkillsGate lets you browse, install, and manage AI agent skills from a single interface. It works with 20+ agents and integrates [skills.sh](https://skills.sh) for public skill discovery.
 
 Instead of hunting through GitHub repos and copying markdown files by hand, you open SkillsGate, search for what you need, and install it to any combination of agents with one click.
 
@@ -62,7 +62,7 @@ Claude Code, Cursor, Windsurf, GitHub Copilot, Cline, Continue, Codex CLI, Droid
 
 ## Features
 
-- **91,000+ skills** -- browse and search the full catalog with keyword or AI-powered search
+- **skills.sh integration** -- browse and search the full public catalog directly from the app
 - **Per-agent management** -- install a skill to specific agents or all of them at once, remove from one without affecting the others
 - **Built-in editor** -- view rendered skill content or edit the raw source with a CodeMirror editor, saved to disk instantly
 - **Remote servers** -- connect to other machines via SSH to browse and sync skills
