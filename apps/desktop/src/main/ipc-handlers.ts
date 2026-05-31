@@ -967,12 +967,11 @@ function gitClone(
   url: string,
   dest: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const userShell = process.env.SHELL || "/bin/zsh"
   return new Promise((resolve) => {
     execFile(
-      userShell,
-      ["-lc", `git clone --depth 1 ${url} ${dest}`],
-      { timeout: 60_000 },
+      "git",
+      ["clone", "--depth", "1", url, dest],
+      { timeout: 60_000, env: buildCliEnv() },
       (error) => {
         if (error) {
           resolve({ success: false, error: error.message })
@@ -1189,16 +1188,23 @@ function ensureStores(): void {
   favoritesStore ??= new FavoritesStore(db)
 }
 
-const COMMON_BIN_DIRS = [
-  "/opt/homebrew/bin",
-  "/opt/homebrew/sbin",
-  "/usr/local/bin",
-  "/usr/local/sbin",
-  "/usr/bin",
-  "/bin",
-  "/usr/sbin",
-  "/sbin",
-]
+const COMMON_BIN_DIRS =
+  process.platform === "win32"
+    ? [
+        path.join(process.env.APPDATA ?? "", "npm"),
+        path.join(process.env.ProgramFiles ?? "C:\\Program Files", "nodejs"),
+        path.join(process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)", "nodejs"),
+      ].filter(Boolean)
+    : [
+        "/opt/homebrew/bin",
+        "/opt/homebrew/sbin",
+        "/usr/local/bin",
+        "/usr/local/sbin",
+        "/usr/bin",
+        "/bin",
+        "/usr/sbin",
+        "/sbin",
+      ]
 
 function dedupePathEntries(entries: string[]): string {
   return [...new Set(entries.filter(Boolean))].join(path.delimiter)
@@ -1230,24 +1236,29 @@ function execFileAsync(
 
 async function resolveNpxPath(): Promise<string> {
   const env = buildCliEnv()
-  const userShell = process.env.SHELL || "/bin/zsh"
+  const isWindows = process.platform === "win32"
 
   try {
-    const { stdout } = await execFileAsync(userShell, ["-lc", "command -v npx"], env)
-    const resolved = stdout.trim().split(/\r?\n/).at(-1)?.trim()
+    const { stdout } = isWindows
+      ? await execFileAsync("where.exe", ["npx"], env)
+      : await execFileAsync(process.env.SHELL || "/bin/sh", ["-lc", "command -v npx"], env)
+    const lines = stdout.trim().split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+    const resolved = isWindows
+      ? lines.find((line) => /\.cmd$/i.test(line)) ?? lines[0]
+      : lines.at(-1)
     if (resolved) {
       return await fs.realpath(resolved).catch(() => resolved)
     }
   } catch (error) {
-    console.error("[skills:install-via-cli] failed to resolve npx via login shell:", error)
+    console.error("[skills:install-via-cli] failed to resolve npx via system shell:", error)
   }
 
-  const candidatePaths = [
-    "/opt/homebrew/bin/npx",
-    "/usr/local/bin/npx",
-    "/usr/bin/npx",
-    "/bin/npx",
-  ].filter((value): value is string => Boolean(value))
+  const candidatePaths = isWindows
+    ? COMMON_BIN_DIRS.flatMap((dir) => [
+        path.join(dir, "npx.cmd"),
+        path.join(dir, "npx.exe"),
+      ])
+    : ["/opt/homebrew/bin/npx", "/usr/local/bin/npx", "/usr/bin/npx", "/bin/npx"]
 
   for (const candidate of candidatePaths) {
     try {
@@ -1259,8 +1270,29 @@ async function resolveNpxPath(): Promise<string> {
   }
 
   throw new Error(
-    `Unable to locate npx. PATH=${env.PATH || "<empty>"} SHELL=${userShell}`,
+    `Unable to locate npx. PATH=${env.PATH || "<empty>"} platform=${process.platform}`,
   )
+}
+
+function quoteWindowsCmdArg(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`
+}
+
+function buildNpxInstallCommand(
+  npxPath: string,
+  safeSource: string,
+): { command: string; args: string[] } {
+  const args = ["skills", "add", safeSource, "--all", "--global", "-y"]
+
+  if (process.platform !== "win32") {
+    return { command: npxPath, args }
+  }
+
+  const quotedCommand = [npxPath, ...args].map(quoteWindowsCmdArg).join(" ")
+  return {
+    command: process.env.ComSpec || "cmd.exe",
+    args: ["/d", "/s", "/c", `"${quotedCommand}"`],
+  }
 }
 
 export function registerIpcHandlers(): void {
@@ -1537,7 +1569,8 @@ export function registerIpcHandlers(): void {
       console.log("[skills:install-via-cli] request received", {
         source,
         safeSource,
-        shell: process.env.SHELL || "/bin/zsh",
+        platform: process.platform,
+        shell: process.env.SHELL || process.env.ComSpec || "<none>",
         path: env.PATH,
       })
 
@@ -1546,15 +1579,13 @@ export function registerIpcHandlers(): void {
         console.log("[skills:install-via-cli] resolved npx", npxPath)
 
         return await new Promise((resolve) => {
-          const child = spawn(
-            npxPath,
-            ["skills", "add", safeSource, "--all", "--global", "-y"],
-            {
-              cwd: os.homedir(),
-              env,
-              stdio: ["ignore", "pipe", "pipe"],
-            },
-          )
+          const { command, args } = buildNpxInstallCommand(npxPath, safeSource)
+          const child = spawn(command, args, {
+            cwd: os.homedir(),
+            env,
+            stdio: ["ignore", "pipe", "pipe"],
+            windowsVerbatimArguments: process.platform === "win32",
+          })
 
           let stdout = ""
           let stderr = ""

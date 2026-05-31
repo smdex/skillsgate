@@ -88,6 +88,34 @@ apps/web/*.tsbuildinfo
 .continue/skills/
 .codex/skills/
 .github/skills/
+/skills/
+/skills-lock.json
+/.adal/skills/
+/.agent/skills/
+/.augment/skills/
+/.codebuddy/skills/
+/.commandcode/skills/
+/.cortex/skills/
+/.crush/skills/
+/.factory/skills/
+/.goose/skills/
+/.iflow/skills/
+/.junie/skills/
+/.kilocode/skills/
+/.kiro/skills/
+/.kode/skills/
+/.mcpjam/skills/
+/.mux/skills/
+/.neovate/skills/
+/.openhands/skills/
+/.pi/skills/
+/.pochi/skills/
+/.qoder/skills/
+/.qwen/skills/
+/.roo/skills/
+/.trae/skills/
+/.vibe/skills/
+/.zencoder/skills/
 
 # ==========================================
 # Other apps (add as needed)
