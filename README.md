@@ -7,8 +7,7 @@
 <p align="center">Visual skill manager for AI agents. Desktop app and TUI.</p>
 
 <p align="center">
-  <a href="https://skillsgate.ai">Website</a> &middot;
-  <a href="https://x.com/sultanvaliyev">@sultanvaliyev</a>
+  <a href="https://skillsgate.ai">Website</a>
 </p>
 
 <p align="center">
@@ -143,5 +142,5 @@ MIT
 ---
 
 <p align="center">
-  Built by <a href="https://x.com/sultanvaliyev">Sultan Valiyev</a>
+  Built by Sultan Valiyev
 </p>
