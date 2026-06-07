@@ -93,16 +93,14 @@ This is a monorepo managed with npm workspaces.
 
 ```
 apps/
-  api/          Hono API on Cloudflare Workers
   web/          React Router v7 on Cloudflare Workers
   desktop/      Electron desktop app
 
 packages/
-  cli/          TUI launcher published as `skillsgate` on npm
-  tui/          Terminal UI published as `@skillsgate/tui`
+  cli/          Node CLI published as `skillsgate` on npm
+  tui/          Terminal UI published as `@skillsgate/tui` (Bun)
   ui/           Shared React components
   local-db/     Shared SQLite persistence and SSH client
-  database/     Prisma schema and migrations
 ```
 
 ### Running locally
@@ -111,16 +109,16 @@ packages/
 # Install dependencies
 npm install
 
+# Web app (default workspace dev server)
+npm run dev
+
 # Desktop app
-cd apps/desktop && npx electron-vite dev
+cd apps/desktop && npm run dev
 
 # TUI (requires Bun)
 cd packages/tui && bun run src/index.tsx
 
-# Web app
-npm run dev -w skillsgate-web
-
-# Deploy web + API
+# Deploy web app to Cloudflare
 npm run deploy
 ```
 
