@@ -113,6 +113,16 @@ declare global {
       limit?: number,
       offset?: number,
     ) => Promise<{ skills: { id: string; skillId: string; name: string; installs: number; source: string }[]; count: number }>
+    fetchTrending: () => Promise<
+      {
+        id: string
+        skillId: string
+        name: string
+        installs: number
+        source: string
+        isOfficial?: boolean
+      }[]
+    >
     fetchSkillContent: (
       source: string,
       skillId: string,

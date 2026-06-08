@@ -1,3 +1,11 @@
+// Re-export the shared trending browse helpers from the CLI core so the
+// scraping/filtering logic lives in exactly one place.
+export {
+  fetchTrending,
+  filterSkills,
+  type SkillsShSkill,
+} from "../../../cli/src/core/skills-sh-client.js"
+
 const SKILLS_SH_BASE = "https://skills.sh"
 const GITHUB_API_BASE = "https://api.github.com"
 const GITHUB_RAW_BASE = "https://raw.githubusercontent.com"

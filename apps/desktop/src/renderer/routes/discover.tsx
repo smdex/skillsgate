@@ -20,6 +20,8 @@ interface CatalogSkill {
   name: string
   installs: number
   source: string
+  // Only present in trending data; live search results omit it.
+  isOfficial?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -60,6 +62,19 @@ function renderMarkdown(raw: string): string {
     }
   }
   return sanitizeHtml(marked.parse(content) as string)
+}
+
+// Case-insensitive substring filter across name, skillId, and source.
+// Mirrors the shared filterSkills behaviour used by the trending browse.
+function filterSkills(skills: CatalogSkill[], query: string): CatalogSkill[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return skills
+  return skills.filter(
+    (s) =>
+      s.name.toLowerCase().includes(q) ||
+      s.skillId.toLowerCase().includes(q) ||
+      s.source.toLowerCase().includes(q),
+  )
 }
 
 function dedupeCatalogSkills(skills: CatalogSkill[]): CatalogSkill[] {
@@ -179,6 +194,28 @@ function SpinnerIcon() {
   )
 }
 
+// Verified badge shown for official skills. Matches lucide-react's BadgeCheck
+// glyph; rendered inline to stay consistent with the other icons in this file.
+function BadgeCheckIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="text-blue-500 flex-shrink-0"
+      aria-label="Official"
+    >
+      <path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  )
+}
+
 function InstallsIcon() {
   return (
     <svg
@@ -226,6 +263,7 @@ const SkillCard = memo(function SkillCard({
         <h3 className="text-[13px] font-semibold text-foreground truncate">
           {skill.name}
         </h3>
+        {skill.isOfficial && <BadgeCheckIcon />}
         {isInstalled && (
           <span className="text-[9px] uppercase tracking-wider font-medium text-accent bg-surface-hover px-1.5 py-0.5 rounded flex-shrink-0">
             installed
@@ -611,6 +649,9 @@ export function Discover() {
   const [installedSources, setInstalledSources] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(true)
+  const [trending, setTrending] = useState<CatalogSkill[]>([])
+  const [isLoadingTrending, setIsLoadingTrending] = useState(true)
+  const [officialOnly, setOfficialOnly] = useState(false)
 
   const LIMIT = 30
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -660,6 +701,24 @@ export function Discover() {
   // Initial catalog load
   useEffect(() => {
     fetchSkills("skill", 0)
+  }, [])
+
+  // Load the trending list once on mount so an idle Discover lands on a
+  // populated, ranked browse instead of a search round-trip. Trending is an
+  // enhancement, so a scrape failure is swallowed rather than surfaced.
+  useEffect(() => {
+    let cancelled = false
+    electronAPI
+      .fetchTrending()
+      .catch(() => [] as CatalogSkill[])
+      .then((items) => {
+        if (cancelled) return
+        setTrending(items)
+        setIsLoadingTrending(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   async function fetchSkills(query: string, offset: number) {
@@ -723,7 +782,9 @@ export function Discover() {
     if (!el) return
 
     function onScroll() {
-      if (!el || !hasMore) return
+      // Only the live-search results paginate; the trending list is fully
+      // loaded up front, so there is nothing more to fetch while idle.
+      if (!el || !hasMore || deferredSearchQuery.trim().length < 2) return
       const { scrollTop, scrollHeight, clientHeight } = el
       if (scrollHeight - scrollTop - clientHeight < 200) {
         handleLoadMore()
@@ -732,7 +793,7 @@ export function Discover() {
 
     el.addEventListener("scroll", onScroll)
     return () => el.removeEventListener("scroll", onScroll)
-  }, [handleLoadMore, hasMore])
+  }, [deferredSearchQuery, handleLoadMore, hasMore])
 
   async function handleInstall(source: string, agentNames: string[]) {
     console.log("[discover] starting install", { source, agentNames })
@@ -755,6 +816,28 @@ export function Discover() {
   const cacheContent = useCallback((key: string, content: string | null) => {
     contentCacheRef.current.set(key, content)
   }, [])
+
+  // The skills shown in the grid:
+  //  - query < 2 chars: the cached/scraped trending list (ranked).
+  //  - query >= 2 chars: trending matches first, then live search results
+  //    whose id isn't already present (long-tail beyond the trending set).
+  //  - "Official only" narrows the final set to verified skills.
+  const trimmedQuery = deferredSearchQuery.trim()
+  const isSearching = trimmedQuery.length >= 2
+
+  const visibleSkills = useMemo(() => {
+    let merged: CatalogSkill[]
+    if (!isSearching) {
+      merged = trending
+    } else {
+      const fromTrending = filterSkills(trending, trimmedQuery)
+      const seen = new Set(fromTrending.map((s) => s.id))
+      const fromSearch = skills.filter((s) => !seen.has(s.id))
+      merged = [...fromTrending, ...fromSearch]
+    }
+
+    return officialOnly ? merged.filter((s) => s.isOfficial) : merged
+  }, [isSearching, officialOnly, skills, trending, trimmedQuery])
 
   return (
     <div className="flex flex-col h-full">
@@ -807,12 +890,28 @@ export function Discover() {
           )}
         </div>
 
-        {/* Results count when searching */}
-        {deferredSearchQuery.trim() && !loading && (
-          <p className="mt-2 text-[11px] text-muted font-mono">
-            {skills.length} result{skills.length !== 1 ? "s" : ""} for "{deferredSearchQuery.trim()}"
-          </p>
-        )}
+        {/* Section label + official-only filter */}
+        <div className="mt-3 flex items-center justify-between max-w-xl">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] uppercase tracking-wider font-medium text-muted">
+              {isSearching ? "Results" : "Trending"}
+            </span>
+            {isSearching && (
+              <span className="text-[11px] text-muted font-mono">
+                {visibleSkills.length} for "{trimmedQuery}"
+              </span>
+            )}
+          </div>
+          <label className="flex items-center gap-1.5 text-[11px] text-muted hover:text-foreground transition-colors cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={officialOnly}
+              onChange={(e) => setOfficialOnly(e.target.checked)}
+              className="h-3 w-3 accent-blue-500"
+            />
+            Official only
+          </label>
+        </div>
       </div>
 
       {/* Error message */}
@@ -824,7 +923,16 @@ export function Discover() {
 
       {/* Grid */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-8">
-        {loading && skills.length === 0 ? (
+        {!isSearching && isLoadingTrending && visibleSkills.length === 0 ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <SpinnerIcon />
+              <p className="text-muted text-[12px] mt-3">
+                Loading popular skills...
+              </p>
+            </div>
+          </div>
+        ) : isSearching && loading && visibleSkills.length === 0 ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
               <SpinnerIcon />
@@ -833,7 +941,7 @@ export function Discover() {
               </p>
             </div>
           </div>
-        ) : skills.length === 0 ? (
+        ) : visibleSkills.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <svg
               width="48"
@@ -850,13 +958,13 @@ export function Discover() {
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
             <p className="text-muted text-sm">
-              No skills found{deferredSearchQuery.trim() ? ` for "${deferredSearchQuery.trim()}"` : ""}.
+              No skills found{trimmedQuery ? ` for "${trimmedQuery}"` : ""}.
             </p>
           </div>
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-              {skills.map((skill) => (
+              {visibleSkills.map((skill) => (
                 <SkillCard
                   key={skill.id}
                   skill={skill}
@@ -865,12 +973,12 @@ export function Discover() {
                 />
               ))}
             </div>
-            {loadingMore && (
+            {isSearching && loadingMore && (
               <div className="flex justify-center py-6">
                 <SpinnerIcon />
               </div>
             )}
-            {!hasMore && skills.length > 0 && (
+            {isSearching && !hasMore && visibleSkills.length > 0 && (
               <p className="text-center text-[11px] text-muted py-4">
                 No more results
               </p>

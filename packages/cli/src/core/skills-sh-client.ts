@@ -5,12 +5,18 @@
 
 const SKILLS_SH_API = "https://skills.sh/api";
 
+// The trending page lives on the www host (the apex host serves the JSON API).
+const SKILLS_SH_TRENDING_URL = "https://www.skills.sh/trending";
+
 export interface SkillsShSkill {
   id: string;
   skillId: string;
   name: string;
   installs: number;
   source: string; // "owner/repo"
+  // Only the trending payload carries this; the search API omits it. Optional
+  // so search results stay valid without a fragile placeholder.
+  isOfficial?: boolean;
 }
 
 export interface SkillsShSearchResponse {
@@ -38,6 +44,84 @@ export async function searchSkillsSh(
   }
 
   return (await res.json()) as SkillsShSearchResponse;
+}
+
+/**
+ * Matches one skill object inside the trending page's embedded payload, e.g.
+ * {"source":"…","skillId":"…","name":"…","installs":123,"isOfficial":true}
+ * The `isOfficial` field is optional because not every entry carries it.
+ */
+const TRENDING_SKILL_RE =
+  /\{"source":"[^"]*","skillId":"[^"]*","name":"[^"]*","installs":\d+(?:,"isOfficial":(?:true|false))?\}/g;
+
+/**
+ * Extract skills from the trending page HTML. The skill objects live inside JS
+ * string literals (a server-rendered framework payload), so JSON quotes arrive
+ * escaped as \"; we unescape, pull out each object, and decode it. Page order is
+ * install-count descending, which we preserve. Duplicates are dropped.
+ */
+export function parseTrending(html: string): SkillsShSkill[] {
+  const unescaped = html.replace(/\\"/g, '"');
+  const seen = new Set<string>();
+  const result: SkillsShSkill[] = [];
+
+  for (const match of unescaped.match(TRENDING_SKILL_RE) ?? []) {
+    let obj: Omit<SkillsShSkill, "id">;
+    try {
+      obj = JSON.parse(match);
+    } catch {
+      continue;
+    }
+    const id = `${obj.source}/${obj.skillId}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    result.push({ ...obj, id });
+  }
+
+  return result;
+}
+
+/**
+ * Fetch the most-installed skills by reading skills.sh's trending page (there is
+ * no JSON API for trending). Returns ~600 skills ranked by install count, which
+ * powers an instant local browse + filter that is both faster and broader than
+ * the fuzzy search API. Throws on a bad response or an empty parse so callers
+ * can fall back to live search.
+ */
+export async function fetchTrending(): Promise<SkillsShSkill[]> {
+  const res = await fetch(SKILLS_SH_TRENDING_URL, {
+    // Identify ourselves honestly since we're reading HTML rather than an API.
+    headers: {
+      "User-Agent": "SkillsGate (+https://github.com/skillsgate/skillsgate)",
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`skills.sh trending failed (HTTP ${res.status})`);
+  }
+
+  const skills = parseTrending(await res.text());
+  if (skills.length === 0) {
+    throw new Error("skills.sh trending returned no skills");
+  }
+  return skills;
+}
+
+/**
+ * Case-insensitive substring filter across name, skillId, and source.
+ * An empty query returns the input unchanged.
+ */
+export function filterSkills(
+  skills: SkillsShSkill[],
+  query: string
+): SkillsShSkill[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return skills;
+  return skills.filter(
+    (s) =>
+      s.name.toLowerCase().includes(q) ||
+      s.skillId.toLowerCase().includes(q) ||
+      s.source.toLowerCase().includes(q)
+  );
 }
 
 /**

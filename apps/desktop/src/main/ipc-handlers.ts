@@ -11,6 +11,11 @@ import { RemoteServerStore } from "./db/servers"
 import { RemoteSkillStore } from "./db/skills"
 import { FavoritesStore } from "./db/favorites"
 import { loadCachedSkills, saveCachedSkills } from "./db/skills-cache"
+import {
+  loadTrendingCache,
+  saveTrendingCache,
+  type TrendingSkill,
+} from "./db/trending-cache"
 import { testConnection, syncRemoteServer, readRemoteFile, writeRemoteFile } from "./db/ssh"
 import { planPush, applyPush } from "./db/push"
 import type { PushPreview } from "./db/push"
@@ -1167,6 +1172,67 @@ async function installSkillToAgent(
 }
 
 // ---------------------------------------------------------------------------
+// Trending scrape (mirrored from packages/cli/src/core/skills-sh-client.ts)
+//
+// The trending listing has no JSON API, so we read the trending page HTML and
+// extract the embedded skill payload. The page lives on the www host (the apex
+// host serves the JSON search API). Results arrive ranked by install count.
+// ---------------------------------------------------------------------------
+
+const SKILLS_SH_TRENDING_URL = "https://www.skills.sh/trending"
+
+const TRENDING_SKILL_RE =
+  /\{"source":"[^"]*","skillId":"[^"]*","name":"[^"]*","installs":\d+(?:,"isOfficial":(?:true|false))?\}/g
+
+/**
+ * Extract skills from the trending page HTML. The skill objects live inside JS
+ * string literals (a server-rendered framework payload), so JSON quotes arrive
+ * escaped as \"; we unescape, pull out each object, and decode it. Page order
+ * (install-count descending) is preserved and duplicates are dropped.
+ */
+function parseTrending(html: string): TrendingSkill[] {
+  const unescaped = html.replace(/\\"/g, '"')
+  const seen = new Set<string>()
+  const result: TrendingSkill[] = []
+
+  for (const match of unescaped.match(TRENDING_SKILL_RE) ?? []) {
+    let obj: Omit<TrendingSkill, "id">
+    try {
+      obj = JSON.parse(match)
+    } catch {
+      continue
+    }
+    const id = `${obj.source}/${obj.skillId}`
+    if (seen.has(id)) continue
+    seen.add(id)
+    result.push({ ...obj, id })
+  }
+
+  return result
+}
+
+/**
+ * Scrape the skills.sh trending page for the most-installed skills.
+ * Throws on a bad response or an empty parse so callers can fall back.
+ */
+async function fetchTrending(): Promise<TrendingSkill[]> {
+  const res = await fetch(SKILLS_SH_TRENDING_URL, {
+    headers: {
+      "User-Agent": "SkillsGate (+https://github.com/skillsgate/skillsgate)",
+    },
+  })
+  if (!res.ok) {
+    throw new Error(`skills.sh trending failed (HTTP ${res.status})`)
+  }
+
+  const skills = parseTrending(await res.text())
+  if (skills.length === 0) {
+    throw new Error("skills.sh trending returned no skills")
+  }
+  return skills
+}
+
+// ---------------------------------------------------------------------------
 // IPC Handlers
 // ---------------------------------------------------------------------------
 
@@ -1507,6 +1573,22 @@ export function registerIpcHandlers(): void {
       if (!res.ok) throw new Error(`skills.sh search failed (HTTP ${res.status})`)
       const data = await res.json()
       return { skills: data.skills ?? [], count: data.count ?? 0 }
+    },
+  )
+
+  // Trending browse: scrape skills.sh's trending page (no JSON API exists).
+  // Returns a fresh six-hour cache when available, otherwise scrapes, persists,
+  // and returns the result. Rejects on scrape failure so the renderer can
+  // treat trending as a non-fatal enhancement over live search.
+  ipcMain.handle(
+    "skills:fetch-trending",
+    async (): Promise<TrendingSkill[]> => {
+      const cached = loadTrendingCache()
+      if (cached) return cached
+
+      const skills = await fetchTrending()
+      saveTrendingCache(skills)
+      return skills
     },
   )
 

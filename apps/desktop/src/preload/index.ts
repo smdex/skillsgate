@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     invokeWithLogging("skills:install-via-cli", source),
   searchCatalog: (query: string, limit?: number, offset?: number) =>
     ipcRenderer.invoke("skills:search-catalog", query, limit, offset),
+  fetchTrending: () => ipcRenderer.invoke("skills:fetch-trending"),
   fetchSkillContent: (source: string, skillId: string) =>
     ipcRenderer.invoke("skills:fetch-content", source, skillId),
   createSkill: (data: {

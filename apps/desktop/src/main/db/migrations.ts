@@ -86,6 +86,18 @@ const MIGRATIONS: Migration[] = [
       INSERT OR IGNORE INTO schema_version VALUES (3);
     `,
   },
+  {
+    version: 4,
+    up: `
+      CREATE TABLE IF NOT EXISTS trending_cache (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        fetched_at TEXT NOT NULL,
+        payload    TEXT NOT NULL
+      );
+
+      INSERT OR IGNORE INTO schema_version VALUES (4);
+    `,
+  },
 ]
 
 function getCurrentVersion(db: Database.Database): number {
