@@ -216,6 +216,20 @@ function BadgeCheckIcon({ size = 13 }: { size?: number }) {
   )
 }
 
+function OfficialBadge() {
+  return (
+    <span className="official-badge relative inline-flex flex-shrink-0 items-center">
+      <BadgeCheckIcon />
+      <span
+        role="tooltip"
+        className="official-tooltip pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-border bg-surface px-2 py-1 text-[10px] font-medium text-foreground shadow-lg"
+      >
+        Skill by a verified organization
+      </span>
+    </span>
+  )
+}
+
 function InstallsIcon() {
   return (
     <svg
@@ -263,7 +277,7 @@ const SkillCard = memo(function SkillCard({
         <h3 className="text-[13px] font-semibold text-foreground truncate">
           {skill.name}
         </h3>
-        {skill.isOfficial && <BadgeCheckIcon />}
+        {skill.isOfficial && <OfficialBadge />}
         {isInstalled && (
           <span className="text-[9px] uppercase tracking-wider font-medium text-accent bg-surface-hover px-1.5 py-0.5 rounded flex-shrink-0">
             installed

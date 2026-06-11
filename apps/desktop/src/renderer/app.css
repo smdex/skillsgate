@@ -120,6 +120,21 @@ body::before {
 	animation: slide-in-right 0.2s ease both;
 }
 
+.official-tooltip {
+	opacity: 0;
+	transform: translate(-50%, -2px);
+	transition:
+		opacity 120ms ease,
+		transform 120ms ease;
+	transition-delay: 0ms;
+}
+
+.official-badge:hover .official-tooltip {
+	opacity: 1;
+	transform: translate(-50%, 0);
+	transition-delay: 800ms;
+}
+
 /* ─── Markdown prose styles (skill detail page) ─── */
 .skill-prose {
 	line-height: 1.75;
